@@ -28,7 +28,8 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* App Shell Layout */
+/* ─── App Shell Layout ─────────────────────────────────────── */
+
 .app-shell {
   display: flex;
   flex-direction: column;
@@ -43,6 +44,24 @@ body {
   overflow: hidden;
 }
 
+/* Left sidebar: tools + layers */
+.app-sidebar {
+  width: 240px;
+  background: #282840;
+  border-right: 1px solid #3a3a5c;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.app-sidebar__divider {
+  height: 1px;
+  background: #3a3a5c;
+  margin: 0;
+}
+
+/* Center canvas area */
 .app-canvas {
   flex: 1;
   display: flex;
@@ -52,35 +71,30 @@ body {
   position: relative;
 }
 
-.app-canvas__content {
-  flex: 1;
+/* Right inspector */
+.app-inspector {
+  width: 280px;
+  background: #282840;
+  border-left: 1px solid #3a3a5c;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
-.app-canvas__debug {
-  position: absolute;
-  bottom: 8px;
-  left: 12px;
-  padding: 4px 8px;
-  background: rgba(30, 30, 46, 0.9);
-  border: 1px solid #3a3a5c;
-  border-radius: 4px;
-  font-size: 11px;
-  color: #6a6a8a;
+/* Debug overlay (dev only) */
+.app-debug {
+  position: fixed;
+  bottom: 32px;
+  left: 8px;
+  padding: 2px 6px;
+  background: rgba(30, 30, 46, 0.7);
+  border-radius: 2px;
+  font-size: 10px;
+  color: #4a4a6c;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   pointer-events: none;
-  z-index: 10;
-}
-
-.app-canvas__debug code {
-  white-space: nowrap;
-}
-
-/* Prevent text selection on UI elements */
-.app-shell {
-  user-select: none;
+  z-index: 100;
 }
 
 /* Focus styles for accessibility */
@@ -93,4 +107,124 @@ body {
 ::selection {
   background: #6c7bff40;
   color: #e0e0f0;
+}
+
+/* ─── TopBar ────────────────────────────────────────────────── */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 12px;
+  background: #282840;
+  border-bottom: 1px solid #3a3a5c;
+  gap: 8px;
+  user-select: none;
+}
+
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar__logo {
+  font-size: 16px;
+  color: #6c7bff;
+}
+
+.topbar__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e0e0f0;
+  letter-spacing: 0.02em;
+}
+
+.topbar__version {
+  font-size: 11px;
+  color: #6a6a8a;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.topbar__file,
+.topbar__edit {
+  display: flex;
+  gap: 2px;
+}
+
+.topbar__btn {
+  background: transparent;
+  border: none;
+  color: #a0a0c0;
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  font-family: inherit;
+}
+
+.topbar__btn:hover:not(:disabled) {
+  background: #3e3e60;
+  color: #e0e0f0;
+}
+
+.topbar__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.topbar__spacer {
+  flex: 1;
+}
+
+.topbar__doc-title {
+  font-size: 12px;
+  color: #6a6a8a;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* ─── StatusBar ─────────────────────────────────────────────── */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 12px;
+  background: #282840;
+  border-top: 1px solid #3a3a5c;
+  font-size: 11px;
+  color: #a0a0c0;
+}
+
+.statusbar__left,
+.statusbar__right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.statusbar__separator {
+  color: #3a3a5c;
+}
+
+/* ─── Scrollbar ─────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3a3a5c;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4a4a6c;
 }

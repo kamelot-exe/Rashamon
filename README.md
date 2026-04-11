@@ -197,7 +197,20 @@ The full strategic and architectural documentation lives in the `docs/` folder a
 
 ## Status
 
-**Early stage.** The monorepo is bootstrapped and the app shell renders. No rendering engine yet — canvas is a placeholder. Next: scene graph and basic tools.
+**Early stage — Phase 2A complete.** The monorepo is bootstrapped, the app shell boots, and the first interactive editor foundation works:
+
+- ✅ SVG canvas renders rectangles, ellipses, lines
+- ✅ Select tool: click to select, drag to move
+- ✅ Rectangle/Ellipse/Line tools: click-drag to create
+- ✅ Properties panel: edit x, y, width, height, rotation
+- ✅ Layers panel: reflects document nodes, select/delete
+- ✅ Save/Open .rdraw files (with fallback download)
+- ✅ Linear undo/redo (Ctrl+Z / Ctrl+Shift+Z)
+- ✅ Keyboard shortcuts: V (select), R (rect), E (ellipse), L (line), Delete
+
+**Not yet implemented:** text rendering, pen tool, grid snap, boolean operations, gradient fills, plugin system, branching history.
+
+Next: Phase 2B — more tools, grid/snap, better selection handles.
 
 ---
 

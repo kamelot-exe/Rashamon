@@ -1,0 +1,1 @@
+{"root":["./src/store/documentStore.test.ts","./src/store/documentStore.ts","./src/tools/toolSystem.ts","./src/utils/fileOps.ts","./src/App.tsx","./src/main.tsx","./src/canvas/CanvasView.tsx","./src/canvas/SvgCanvas.tsx","./src/panels/LayersPanel.tsx","./src/panels/PropertiesPanel.tsx","./src/tools/ToolButtons.tsx"],"version":"5.9.3"}
