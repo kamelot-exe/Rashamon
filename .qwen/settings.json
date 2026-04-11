@@ -12,7 +12,8 @@
       "Bash(npx *)",
       "Bash(curl *)",
       "Bash(sh *)",
-      "Bash(source *)"
+      "Bash(source *)",
+      "Bash(lsof *)"
     ]
   },
   "$version": 3

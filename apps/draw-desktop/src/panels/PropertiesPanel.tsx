@@ -11,8 +11,8 @@
  */
 
 import { FC, useEffect, useState } from 'react';
-import type { ShapeSceneNode, RectGeometry, EllipseGeometry, LineGeometry } from '@rashamon/types';
-import { subscribe, getSelectedId, getSelectedNode, updateTransform, updateNodeName } from '../store/documentStore.js';
+import type { ShapeSceneNode, TextSceneNode, RectGeometry, EllipseGeometry, LineGeometry } from '@rashamon/types';
+import { subscribe, getSelectedId, getSelectedNode, updateTransform, updateNodeName, updateTextContent, updateTextProperties } from '../store/documentStore.js';
 import './PropertiesPanel.css';
 
 export const PropertiesPanel: FC = () => {
@@ -38,12 +38,144 @@ export const PropertiesPanel: FC = () => {
     );
   }
 
-  if (selectedNode.type !== 'shape') {
+  // Text node editing
+  if (selectedNode.type === 'text') {
+    const textNode = selectedNode as TextSceneNode;
     return (
       <div className="properties-panel">
         <div className="properties-panel__header">Properties</div>
         <div className="properties-panel__content">
-          <p>{selectedNode.type} (editing not yet supported)</p>
+          {/* Name */}
+          <div className="prop-group">
+            <label className="prop-label">Name</label>
+            <input
+              className="prop-input"
+              type="text"
+              value={textNode.name}
+              onChange={(e) => updateNodeName(selectedId, e.target.value)}
+            />
+          </div>
+
+          {/* Position */}
+          <div className="prop-group">
+            <label className="prop-label">Position</label>
+            <div className="prop-row">
+              <div className="prop-field">
+                <span className="prop-field__label">X</span>
+                <input
+                  className="prop-input prop-input--small"
+                  type="number"
+                  value={Math.round(textNode.transform.x)}
+                  onChange={(e) =>
+                    updateTransform(selectedId, { ...textNode.transform, x: Number(e.target.value) })
+                  }
+                />
+              </div>
+              <div className="prop-field">
+                <span className="prop-field__label">Y</span>
+                <input
+                  className="prop-input prop-input--small"
+                  type="number"
+                  value={Math.round(textNode.transform.y)}
+                  onChange={(e) =>
+                    updateTransform(selectedId, { ...textNode.transform, y: Number(e.target.value) })
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Text content */}
+          <div className="prop-group">
+            <label className="prop-label">Content</label>
+            <textarea
+              className="prop-input prop-input--textarea"
+              value={textNode.content}
+              onChange={(e) => updateTextContent(selectedId, e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          {/* Font size */}
+          <div className="prop-group">
+            <label className="prop-label">Font Size</label>
+            <div className="prop-row">
+              <div className="prop-field">
+                <input
+                  className="prop-input prop-input--small"
+                  type="number"
+                  value={textNode.fontSize}
+                  onChange={(e) =>
+                    updateTextProperties(selectedId, { fontSize: Number(e.target.value) })
+                  }
+                />
+                <span className="prop-field__unit">px</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Font family */}
+          <div className="prop-group">
+            <label className="prop-label">Font</label>
+            <input
+              className="prop-input"
+              type="text"
+              value={textNode.fontFamily}
+              onChange={(e) =>
+                updateTextProperties(selectedId, { fontFamily: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Fill color */}
+          <div className="prop-group">
+            <label className="prop-label">Color</label>
+            <div className="prop-row">
+              <input
+                className="prop-input"
+                type="color"
+                value={textNode.fill}
+                onChange={(e) =>
+                  updateTextProperties(selectedId, { fill: e.target.value })
+                }
+                style={{ width: '40px', height: '30px', padding: '2px' }}
+              />
+              <span className="prop-value">{textNode.fill}</span>
+            </div>
+          </div>
+
+          {/* Rotation */}
+          <div className="prop-group">
+            <label className="prop-label">Rotation</label>
+            <div className="prop-row">
+              <div className="prop-field">
+                <input
+                  className="prop-input prop-input--full"
+                  type="number"
+                  value={Math.round(textNode.transform.rotation)}
+                  onChange={(e) =>
+                    updateTransform(selectedId, {
+                      ...textNode.transform,
+                      rotation: Number(e.target.value),
+                    })
+                  }
+                />
+                <span className="prop-field__unit">deg</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Group nodes
+  if (selectedNode.type === 'group') {
+    return (
+      <div className="properties-panel">
+        <div className="properties-panel__header">Properties</div>
+        <div className="properties-panel__content">
+          <p>Group (editing not yet supported)</p>
         </div>
       </div>
     );

@@ -23,12 +23,13 @@ import type {
 } from '@rashamon/types';
 import {
   addShapeNode,
+  addTextNode,
   selectNode,
   getDocument,
   updateTransform,
 } from '../store/documentStore.js';
 
-export type ToolType = 'select' | 'rectangle' | 'ellipse' | 'line';
+export type ToolType = 'select' | 'rectangle' | 'ellipse' | 'line' | 'text';
 
 export interface ToolContext {
   type: ToolType;
@@ -87,6 +88,8 @@ export function handleMouseDown(e: React.MouseEvent<SVGSVGElement>): void {
     handleEllipseMouseDown(pos);
   } else if (activeTool === 'line') {
     handleLineMouseDown(pos);
+  } else if (activeTool === 'text') {
+    handleTextMouseDown(pos);
   }
 }
 
@@ -172,7 +175,8 @@ function handleRectangleMouseDown(pos: Vec2): void {
     geo,
     'Rectangle',
     { type: 'solid', color: '#3B82F6' },
-    { color: '#1D4ED8', width: 1, lineCap: 'butt', lineJoin: 'miter' }
+    { color: '#1D4ED8', width: 1, lineCap: 'butt', lineJoin: 'miter' },
+    pos
   );
 
   interaction.createdNodeId = id;
@@ -191,7 +195,8 @@ function handleEllipseMouseDown(pos: Vec2): void {
     geo,
     'Ellipse',
     { type: 'solid', color: '#10B981' },
-    { color: '#047857', width: 1, lineCap: 'butt', lineJoin: 'miter' }
+    { color: '#047857', width: 1, lineCap: 'butt', lineJoin: 'miter' },
+    pos
   );
 
   interaction.createdNodeId = id;
@@ -210,10 +215,20 @@ function handleLineMouseDown(pos: Vec2): void {
     geo,
     'Line',
     null,
-    { color: '#F59E0B', width: 2, lineCap: 'round', lineJoin: 'miter' }
+    { color: '#F59E0B', width: 2, lineCap: 'round', lineJoin: 'miter' },
+    pos
   );
 
   interaction.createdNodeId = id;
+}
+
+// ─── Text tool ──────────────────────────────────────────────
+
+function handleTextMouseDown(pos: Vec2): void {
+  const content = prompt('Enter text:', 'Text');
+  if (!content) return;
+
+  addTextNode(content, pos);
 }
 
 // ─── Shape drag (shared by rectangle, ellipse, line) ────────

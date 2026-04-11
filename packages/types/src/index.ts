@@ -138,12 +138,20 @@ export interface PolygonGeometry {
   points: Vec2[];
 }
 
+export interface TextGeometry {
+  type: 'text';
+  content: string;
+  fontFamily: string;
+  fontSize: number;
+}
+
 export type Geometry =
   | RectGeometry
   | EllipseGeometry
   | LineGeometry
   | PathGeometry
-  | PolygonGeometry;
+  | PolygonGeometry
+  | TextGeometry;
 
 // ─── Scene Node ──────────────────────────────────────────────
 

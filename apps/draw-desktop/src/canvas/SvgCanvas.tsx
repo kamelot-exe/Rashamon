@@ -8,7 +8,7 @@
  * may add Canvas/WebGL rendering for performance with large scenes.
  */
 
-import { SceneNode, ShapeSceneNode, GroupSceneNode, RectGeometry, EllipseGeometry, LineGeometry, NodeId } from '@rashamon/types';
+import { SceneNode, ShapeSceneNode, GroupSceneNode, TextSceneNode, RectGeometry, EllipseGeometry, LineGeometry, TextGeometry, NodeId } from '@rashamon/types';
 
 // ─── Main renderer ──────────────────────────────────────────
 
@@ -39,13 +39,23 @@ export function renderSceneNodes(node: SceneNode): React.ReactElement {
       );
     }
 
-    case 'text':
-      // TODO: implement text rendering
+    case 'text': {
+      const textNode = node as TextSceneNode;
       return (
-        <text key={node.id} data-node-id={node.id} style={style}>
-          {node.content}
+        <text
+          key={node.id}
+          data-node-id={node.id}
+          x={node.transform.x}
+          y={node.transform.y + textNode.fontSize}
+          style={style}
+          fill={textNode.fill}
+          fontFamily={textNode.fontFamily}
+          fontSize={textNode.fontSize}
+        >
+          {textNode.content}
         </text>
       );
+    }
 
     default: {
       const _exhaustive: never = node;
@@ -95,6 +105,21 @@ function renderGeometry(shape: ShapeSceneNode): React.ReactElement {
       const points = shape.geometry.points.map((p) => `${p.x},${p.y}`).join(' ');
       return <polygon points={points} {...attrs} />;
     }
+    case 'text': {
+      const geo = shape.geometry as TextGeometry;
+      return (
+        <text
+          x={0}
+          y={geo.fontSize}
+          fill={shape.fill?.color ?? '#FFFFFF'}
+          fontFamily={geo.fontFamily}
+          fontSize={geo.fontSize}
+          {...attrs}
+        >
+          {geo.content}
+        </text>
+      );
+    }
     default:
       return <rect width={0} height={0} {...attrs} />;
   }
@@ -143,54 +168,238 @@ function buildTransform(t: { x: number; y: number; rotation: number; scaleX: num
 
 // ─── Selection overlay ──────────────────────────────────────
 
-export function renderSelectionOverlay(
-  nodeId: NodeId | null,
-  nodes: SceneNode[]
-): React.ReactElement | null {
+const HANDLE_SIZE = 8;
+const ROTATE_HANDLE_OFFSET = 25;
+
+interface SelectionOverlayProps {
+  nodeId: NodeId | null;
+  nodes: SceneNode[];
+  onResize: (nodeId: NodeId, handle: string, dx: number, dy: number, shiftKey: boolean, isStart: boolean, isEnd: boolean) => void;
+  onRotate: (nodeId: NodeId, angle: number, isStart: boolean, isEnd: boolean) => void;
+}
+
+export function SelectionOverlay({ nodeId, nodes, onResize, onRotate }: SelectionOverlayProps): React.ReactElement | null {
   if (!nodeId) return null;
 
-  const node = findNodeById(nodes.length > 0 ? { id: 'root', name: '', type: 'group', transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0, skewY: 0 }, visible: true, locked: false, opacity: 1, semanticTags: [], children: nodes } as GroupSceneNode : null, nodeId);
-  if (!node || node.type !== 'shape') return null;
+  const node = findNodeById(
+    nodes.length > 0
+      ? { id: 'root', name: '', type: 'group', transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0, skewY: 0 }, visible: true, locked: false, opacity: 1, semanticTags: [], children: nodes } as GroupSceneNode
+      : null,
+    nodeId
+  );
 
-  const shape = node as ShapeSceneNode;
-  const { x, y } = shape.transform;
-  let w = 0, h = 0;
+  if (!node || (node.type !== 'shape' && node.type !== 'text')) return null;
 
-  switch (shape.geometry.type) {
-    case 'rect': {
-      const g = shape.geometry as RectGeometry;
-      w = g.width;
-      h = g.height;
-      break;
+  const { x, y, rotation } = node.transform;
+  let w = 0, h = 0, centerX = x, centerY = y;
+
+  if (node.type === 'shape') {
+    const shape = node as ShapeSceneNode;
+    switch (shape.geometry.type) {
+      case 'rect': {
+        const g = shape.geometry as RectGeometry;
+        w = g.width;
+        h = g.height;
+        centerX = x + w / 2;
+        centerY = y + h / 2;
+        break;
+      }
+      case 'ellipse': {
+        const g = shape.geometry as EllipseGeometry;
+        w = g.rx * 2;
+        h = g.ry * 2;
+        centerX = x;
+        centerY = y;
+        break;
+      }
+      case 'line': {
+        const g = shape.geometry as LineGeometry;
+        w = Math.abs(g.x2 - g.x1);
+        h = Math.abs(g.y2 - g.y1);
+        centerX = x + (g.x1 + g.x2) / 2;
+        centerY = y + (g.y1 + g.y2) / 2;
+        break;
+      }
+      default: {
+        centerX = x + w / 2;
+        centerY = y + h / 2;
+      }
     }
-    case 'ellipse': {
-      const g = shape.geometry as EllipseGeometry;
-      w = g.rx * 2;
-      h = g.ry * 2;
-      break;
-    }
-    case 'line': {
-      const g = shape.geometry as LineGeometry;
-      w = Math.abs(g.x2 - g.x1);
-      h = Math.abs(g.y2 - g.y1);
-      break;
-    }
+  } else if (node.type === 'text') {
+    const textNode = node as TextSceneNode;
+    const approxWidth = textNode.content.length * textNode.fontSize * 0.6;
+    w = approxWidth;
+    h = textNode.fontSize;
+    centerX = x + w / 2;
+    centerY = y;
   }
 
+  const hs = HANDLE_SIZE / 2;
+
+  // Handle positions: tl, tr, bl, br, top, bottom, left, right
+  const handles = [
+    { id: 'tl', cx: x - hs, cy: y - hs, cursor: 'nwse-resize' },
+    { id: 'tr', cx: x + w - hs, cy: y - hs, cursor: 'nesw-resize' },
+    { id: 'bl', cx: x - hs, cy: y + h - hs, cursor: 'nesw-resize' },
+    { id: 'br', cx: x + w - hs, cy: y + h - hs, cursor: 'nwse-resize' },
+    { id: 'tm', cx: x + w / 2 - hs, cy: y - hs, cursor: 'ns-resize' },
+    { id: 'bm', cx: x + w / 2 - hs, cy: y + h - hs, cursor: 'ns-resize' },
+    { id: 'ml', cx: x - hs, cy: y + h / 2 - hs, cursor: 'ew-resize' },
+    { id: 'mr', cx: x + w - hs, cy: y + h / 2 - hs, cursor: 'ew-resize' },
+  ];
+
+  // Rotate handle position (above center)
+  const rotateY = y - ROTATE_HANDLE_OFFSET;
+  const rotateX = x + w / 2;
+
   return (
-    <rect
-      x={x - 2}
-      y={y - 2}
-      width={w + 4}
-      height={h + 4}
-      fill="none"
-      stroke="#6c7bff"
-      strokeWidth={2}
-      strokeDasharray="4 2"
-      pointerEvents="none"
-      className="selection-outline"
-    />
+    <g className="selection-overlay" pointerEvents="auto">
+      {/* Bounding box */}
+      <rect
+        x={x - 2}
+        y={y - 2}
+        width={w + 4}
+        height={h + 4}
+        fill="none"
+        stroke="#6c7bff"
+        strokeWidth={2}
+        strokeDasharray="4 2"
+        pointerEvents="none"
+        {...(rotation !== 0 ? { transform: `rotate(${rotation} ${centerX} ${centerY})` } : {})}
+      />
+
+      {/* Rotate handle line */}
+      <line
+        x1={x + w / 2}
+        y1={y - 2}
+        x2={rotateX}
+        y2={rotateY + hs}
+        stroke="#6c7bff"
+        strokeWidth={2}
+        pointerEvents="none"
+        {...(rotation !== 0 ? { transform: `rotate(${rotation} ${centerX} ${centerY})` } : {})}
+      />
+
+      {/* Rotate handle circle */}
+      <circle
+        cx={rotateX}
+        cy={rotateY}
+        r={6}
+        fill="#fff"
+        stroke="#6c7bff"
+        strokeWidth={2}
+        className="rotate-handle"
+        cursor="grab"
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          handleRotateStart(e, nodeId, centerX, centerY, onRotate);
+        }}
+      />
+
+      {/* Resize handles */}
+      {handles.map((handle) => (
+        <rect
+          key={handle.id}
+          x={handle.cx}
+          y={handle.cy}
+          width={HANDLE_SIZE}
+          height={HANDLE_SIZE}
+          fill="#fff"
+          stroke="#6c7bff"
+          strokeWidth={2}
+          rx={2}
+          className="resize-handle"
+          cursor={handle.cursor}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            handleResizeStart(e, nodeId, handle.id, onResize);
+          }}
+          {...(rotation !== 0 ? { transform: `rotate(${rotation} ${centerX} ${centerY})` } : {})}
+        />
+      ))}
+    </g>
   );
+}
+
+// ─── Resize interaction ─────────────────────────────────────
+
+function handleResizeStart(
+  e: React.MouseEvent<SVGElement>,
+  nodeId: NodeId,
+  handle: string,
+  onResize: (nodeId: NodeId, handle: string, dx: number, dy: number, shiftKey: boolean, isStart: boolean, isEnd: boolean) => void
+): void {
+  const svg = e.currentTarget.closest('svg');
+  if (!svg) return;
+
+  const startPos = { x: e.clientX, y: e.clientY };
+  let lastDx = 0, lastDy = 0;
+
+  // Push history on start
+  onResize(nodeId, handle, 0, 0, false, true, false);
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    const dx = moveEvent.clientX - startPos.x;
+    const dy = moveEvent.clientY - startPos.y;
+    const deltaDx = dx - lastDx;
+    const deltaDy = dy - lastDy;
+    lastDx = dx;
+    lastDy = dy;
+
+    onResize(nodeId, handle, deltaDx, deltaDy, moveEvent.shiftKey, false, false);
+  };
+
+  const onMouseUp = () => {
+    onResize(nodeId, handle, 0, 0, false, false, true);
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+  };
+
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp, { once: true });
+}
+
+// ─── Rotate interaction ─────────────────────────────────────
+
+function handleRotateStart(
+  e: React.MouseEvent<SVGElement>,
+  nodeId: NodeId,
+  centerX: number,
+  centerY: number,
+  onRotate: (nodeId: NodeId, angle: number, isStart: boolean, isEnd: boolean) => void
+): void {
+  const svg = e.currentTarget.closest('svg');
+  if (!svg) return;
+
+  const svgRect = svg.getBoundingClientRect();
+  const startAngle = Math.atan2(e.clientY - svgRect.top - centerY, e.clientX - svgRect.left - centerX) * (180 / Math.PI);
+  let lastAngle = startAngle;
+
+  // Push history on start
+  onRotate(nodeId, 0, true, false);
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    const currentAngle = Math.atan2(moveEvent.clientY - svgRect.top - centerY, moveEvent.clientX - svgRect.left - centerX) * (180 / Math.PI);
+    let delta = currentAngle - lastAngle;
+
+    // Snap to 15-degree increments when shift is held
+    if (moveEvent.shiftKey) {
+      delta = Math.round(delta / 15) * 15;
+    }
+
+    lastAngle = currentAngle;
+
+    onRotate(nodeId, delta, false, false);
+  };
+
+  const onMouseUp = () => {
+    onRotate(nodeId, 0, false, true);
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+  };
+
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp, { once: true });
 }
 
 function findNodeById(group: GroupSceneNode | null, id: string): SceneNode | null {

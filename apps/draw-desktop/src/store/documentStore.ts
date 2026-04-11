@@ -15,6 +15,7 @@ import {
   SceneNode,
   ShapeSceneNode,
   GroupSceneNode,
+  TextSceneNode,
   NodeId,
   Transform,
   RectGeometry,
@@ -22,6 +23,7 @@ import {
   LineGeometry,
   Fill,
   Stroke,
+  Vec2,
 } from '@rashamon/types';
 import { createDocument } from '@rashamon/core';
 
@@ -170,7 +172,8 @@ export function addShapeNode(
   geometry: RectGeometry | EllipseGeometry | LineGeometry,
   name: string,
   fill: Fill | null = null,
-  stroke: Stroke | null = null
+  stroke: Stroke | null = null,
+  position?: Vec2
 ): NodeId {
   pushHistory();
   const doc = store.history.present;
@@ -183,7 +186,7 @@ export function addShapeNode(
     geometry,
     fill,
     stroke,
-    transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0, skewY: 0 },
+    transform: { x: position?.x ?? 0, y: position?.y ?? 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0, skewY: 0 },
     visible: true,
     locked: false,
     opacity: 1,
@@ -196,6 +199,56 @@ export function addShapeNode(
   return id;
 }
 
+export function addTextNode(
+  content: string,
+  position: Vec2,
+  fontSize: number = 16,
+  fontFamily: string = 'Inter, system-ui, sans-serif',
+  fill: string = '#FFFFFF'
+): NodeId {
+  pushHistory();
+  const doc = store.history.present;
+  const id = generateId();
+
+  const node: TextSceneNode = {
+    id,
+    name: 'Text',
+    type: 'text',
+    content,
+    fontFamily,
+    fontSize,
+    fill,
+    transform: { x: position.x, y: position.y, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0, skewY: 0 },
+    visible: true,
+    locked: false,
+    opacity: 1,
+    semanticTags: [],
+  };
+
+  doc.root.children.push(node);
+  store.selectedId = id;
+  notify();
+  return id;
+}
+
+export function updateTextContent(id: NodeId, content: string): void {
+  pushHistory();
+  const doc = store.history.present;
+  const node = findNode(doc.root, id);
+  if (!node || node.type !== 'text') return;
+  node.content = content;
+  notify();
+}
+
+export function updateTextProperties(id: NodeId, props: Partial<Pick<TextSceneNode, 'fontSize' | 'fontFamily' | 'fill'>>): void {
+  pushHistory();
+  const doc = store.history.present;
+  const node = findNode(doc.root, id);
+  if (!node || node.type !== 'text') return;
+  Object.assign(node, props);
+  notify();
+}
+
 export function selectNode(id: NodeId | null): void {
   store.selectedId = id;
   notify();
@@ -205,8 +258,44 @@ export function updateTransform(id: NodeId, transform: Partial<Transform>): void
   pushHistory();
   const doc = store.history.present;
   const node = findNode(doc.root, id);
-  if (!node || node.type !== 'shape') return;
+  if (!node) return;
   node.transform = { ...node.transform, ...transform };
+  notify();
+}
+
+export function resizeNode(id: NodeId, geometry: Partial<RectGeometry | EllipseGeometry | LineGeometry>, pushHistoryFlag: boolean = true): void {
+  if (pushHistoryFlag) {
+    pushHistory();
+  }
+  const doc = store.history.present;
+  const node = findNode(doc.root, id);
+  if (!node || node.type !== 'shape') return;
+
+  const geo = node.geometry;
+  if (geo.type === 'rect' && geometry.type === 'rect') {
+    geo.width = geometry.width ?? geo.width;
+    geo.height = geometry.height ?? geo.height;
+    if (geometry.cornerRadius) geo.cornerRadius = geometry.cornerRadius;
+  } else if (geo.type === 'ellipse' && geometry.type === 'ellipse') {
+    geo.rx = geometry.rx ?? geo.rx;
+    geo.ry = geometry.ry ?? geo.ry;
+  } else if (geo.type === 'line' && geometry.type === 'line') {
+    geo.x1 = geometry.x1 ?? geo.x1;
+    geo.y1 = geometry.y1 ?? geo.y1;
+    geo.x2 = geometry.x2 ?? geo.x2;
+    geo.y2 = geometry.y2 ?? geo.y2;
+  }
+  notify();
+}
+
+export function rotateNode(id: NodeId, angle: number, pushHistoryFlag: boolean = true): void {
+  if (pushHistoryFlag) {
+    pushHistory();
+  }
+  const doc = store.history.present;
+  const node = findNode(doc.root, id);
+  if (!node) return;
+  node.transform.rotation = (node.transform.rotation + angle) % 360;
   notify();
 }
 
@@ -263,7 +352,7 @@ function flatten(node: SceneNode, depth: number, result: FlatNode[]): void {
 
 // ─── Helpers ─────────────────────────────────────────────────
 
-function findNode(node: SceneNode, id: NodeId): SceneNode | null {
+export function findNode(node: SceneNode, id: NodeId): SceneNode | null {
   if (node.id === id) return node;
   if (node.type === 'group') {
     const group = node as GroupSceneNode;

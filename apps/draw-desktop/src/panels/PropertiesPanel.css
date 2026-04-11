@@ -102,6 +102,13 @@
   width: 100%;
 }
 
+.prop-input--textarea {
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+  font-family: var(--font-mono);
+}
+
 .prop-value {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);

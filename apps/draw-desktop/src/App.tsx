@@ -20,7 +20,7 @@ import { LayersPanel } from './panels/LayersPanel.js';
 import { PropertiesPanel } from './panels/PropertiesPanel.js';
 import { CanvasView } from './canvas/CanvasView.js';
 import { getDocument, subscribe, canUndo, canRedo, undo, redo } from './store/documentStore.js';
-import { handleNewDocument, handleSaveDocument, handleOpenDocument } from './utils/fileOps.js';
+import { handleNewDocument, handleSaveDocument, handleOpenDocument, handleExportSvg, handleExportPng } from './utils/fileOps.js';
 import './styles/global.css';
 
 // ─── TopBar ─────────────────────────────────────────────────
@@ -67,6 +67,22 @@ const TopBar: FC = () => {
           title="Redo (Ctrl+Shift+Z)"
         >
           Redo
+        </button>
+      </div>
+      <div className="topbar__export">
+        <button
+          className="topbar__btn"
+          onClick={handleExportSvg}
+          title="Export as SVG"
+        >
+          Export SVG
+        </button>
+        <button
+          className="topbar__btn"
+          onClick={handleExportPng}
+          title="Export as PNG (TODO)"
+        >
+          Export PNG
         </button>
       </div>
       <div className="topbar__spacer" />

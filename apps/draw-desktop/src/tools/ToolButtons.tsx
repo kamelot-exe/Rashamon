@@ -18,6 +18,7 @@ const TOOLS: ToolButtonDef[] = [
   { type: 'rectangle', label: 'Rectangle', shortcut: 'R', icon: '▭' },
   { type: 'ellipse', label: 'Ellipse', shortcut: 'E', icon: '○' },
   { type: 'line', label: 'Line', shortcut: 'L', icon: '╱' },
+  { type: 'text', label: 'Text', shortcut: 'T', icon: 'T' },
 ];
 
 export const ToolButtons: FC = () => {

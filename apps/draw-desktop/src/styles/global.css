@@ -147,7 +147,8 @@ body {
 }
 
 .topbar__file,
-.topbar__edit {
+.topbar__edit,
+.topbar__export {
   display: flex;
   gap: 2px;
 }

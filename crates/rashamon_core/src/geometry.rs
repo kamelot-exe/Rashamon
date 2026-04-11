@@ -28,6 +28,11 @@ pub enum Geometry {
     Polygon {
         points: Vec<(f64, f64)>,
     },
+    Text {
+        content: String,
+        font_family: String,
+        font_size: f64,
+    },
 }
 
 /// Corner radius for rectangles.
@@ -91,6 +96,11 @@ impl Geometry {
                     max_y = max_y.max(*y);
                 }
                 (min_x, min_y, max_x, max_y)
+            }
+            Geometry::Text { content, font_size, .. } => {
+                // Rough estimation: each character is ~0.6 * font_size wide
+                let approx_width = content.len() as f64 * font_size * 0.6;
+                (0.0, 0.0, approx_width, *font_size)
             }
         }
     }
