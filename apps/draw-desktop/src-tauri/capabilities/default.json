@@ -1,0 +1,12 @@
+[
+  {
+    "identifier": "default",
+    "description": "Default capabilities for Rashamon Draw",
+    "local": true,
+    "windows": ["main"],
+    "permissions": [
+      "core:default",
+      "shell:allow-open"
+    ]
+  }
+]

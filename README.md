@@ -12,7 +12,7 @@ Rashamon is an **ecosystem of professional creative tools** built on a shared op
 
 | Product | Type | Status |
 |---|---|---|
-| **Rashamon Draw** | Vector/UI/layout editor | 🟡 In development (MVP) |
+| **Rashamon Draw** | Vector/UI/layout editor | 🟡 In development — app shell ready |
 | **Rashamon Photo** | Raster/photo editor | 🔒 Planned |
 | **Rashamon Motion** | Motion graphics/animation | 🔒 Planned |
 
@@ -46,8 +46,6 @@ Rashamon takes a different approach:
 - **Keyboard-first UX** — everything accessible via keyboard
 - **AI only where it helps** — assistance, not replacement
 
-See [[Product Philosophy]] for the full document.
-
 ---
 
 ## Architecture
@@ -57,26 +55,80 @@ See [[Product Philosophy]] for the full document.
 | Layer | Technology |
 |---|---|
 | App shell | Tauri 2 |
-| Frontend | React + TypeScript |
+| Frontend | React 19 + TypeScript |
 | Backend | Rust |
 | Build | pnpm workspace + cargo workspace |
-| Rendering | SVG/Canvas hybrid |
+| Bundler | Vite 6 |
+| Rendering | SVG/Canvas hybrid (planned) |
 | Storage | JSON-based project files, SQLite where useful |
 
 ### Structure
 
 ```
 rashamon/
-├── crates/          # Rust libraries (core, plugins, assets)
-├── packages/        # TypeScript packages (UI, bindings)
-├── apps/
-│   ├── draw/        # Rashamon Draw
-│   ├── photo/       # Rashamon Photo (later)
-│   └── motion/      # Rashamon Motion (later)
-└── docs/            # Obsidian knowledge base (strategy, architecture)
+├── apps/draw-desktop/          # Rashamon Draw (Tauri 2 + React)
+│   ├── src/                    # React frontend (app shell UI)
+│   └── src-tauri/              # Rust backend (Tauri commands)
+├── packages/
+│   ├── types/                  # @rashamon/types — shared TS types
+│   ├── core/                   # @rashamon/core — document factory
+│   └── ui/                     # @rashamon/ui — shell components
+├── crates/
+│   ├── rashamon_core/          # Rust data model
+│   └── rashamon_file_format/   # .rdraw serialization
+└── docs/                       # Obsidian knowledge base
 ```
 
-Full architecture: [[System Architecture]]
+Full architecture: [Workspace Structure](docs/04_ARCHITECTURE/Workspace%20Structure.md)
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- **Node.js** ≥ 20
+- **pnpm** ≥ 10 (`corepack enable` or `npm i -g pnpm`)
+- **Rust** ≥ 1.80 (`rustup install stable`)
+- **Linux build deps**: `webkit2gtk-4.1`, `build-essential`, `curl`, `wget`, `file`, `libssl-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`
+
+### Quick Start
+
+```bash
+# Clone
+git clone https://github.com/kamelot-exe/Rashamon.git
+cd Rashamon
+
+# Install dependencies
+pnpm install
+
+# Run Rashamon Draw in dev mode
+pnpm dev:draw
+```
+
+### Root Commands
+
+| Command | Description |
+|---|---|
+| `pnpm dev:draw` | Start Draw in dev mode (Vite HMR) |
+| `pnpm build:draw` | Production build |
+| `pnpm check` | Format check + lint + typecheck |
+| `pnpm format` | Auto-format all TS/CSS files |
+| `pnpm lint` | Run ESLint |
+| `pnpm typecheck` | TypeScript type check |
+
+### Rust Commands
+
+```bash
+# From the project root:
+cargo check --workspace        # Check all crates
+cargo clippy --workspace       # Lint all crates
+cargo test --workspace         # Test all crates
+
+# Tauri commands (from apps/draw-desktop/src-tauri/):
+cargo tauri dev                # Run with Tauri CLI
+cargo tauri build              # Build release binary
+```
 
 ---
 
@@ -84,8 +136,8 @@ Full architecture: [[System Architecture]]
 
 | Phase | Name | Status |
 |---|---|---|
-| Phase 0 | Foundation / docs / strategy | 🟡 Current |
-| Phase 1 | Monorepo + app shell | 🔒 |
+| Phase 0 | Foundation / docs / strategy | ✅ Complete |
+| Phase 1 | Monorepo + app shell | 🟡 In progress — shell boots |
 | Phase 2 | Document model + scene graph | 🔒 |
 | Phase 3 | Basic editor MVP | 🔒 |
 | Phase 4 | Usability layer | 🔒 |
@@ -93,7 +145,7 @@ Full architecture: [[System Architecture]]
 | Phase 6 | Plugin foundation | 🔒 |
 | Phase 7 | Community / governance / release | 🔒 |
 
-Full roadmap: [[Product Roadmap]]
+Full roadmap: [Product Roadmap](docs/02_STRATEGY/Product%20Roadmap.md)
 
 ---
 
@@ -112,35 +164,21 @@ Rashamon differentiates through **unique workflows** that existing tools simply 
 
 ## Contributing
 
-Contributions are welcome. Read [[CONTRIBUTING]] and the [[Code of Conduct]] before starting.
-
-**Quick start:**
-
-```bash
-git clone https://github.com/kamelot-exe/Rashamon.git
-cd Rashamon
-# Setup instructions in CONTRIBUTING.md
-```
-
-Look for [good-first-issue](https://github.com/kamelot-exe/Rashamon/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-issue) tags to get started.
+Contributions are welcome. See the [CONTRIBUTING](docs/09_GITHUB/CONTRIBUTING.md) guide and [Code of Conduct](docs/09_GITHUB/CODE_OF_CONDUCT.md).
 
 ---
 
 ## Brand & Trademark
 
-> ⚠️ **Important**: The Rashamon code is open source and can be forked under the terms of its license. However, the **name "Rashamon"**, official logos, and official builds are governed separately.
+> ⚠️ The Rashamon code is open source and can be forked under the terms of its license. However, the **name "Rashamon"**, official logos, and official builds are governed separately. This is the same model as Mozilla Firefox, Blender, and Canonical Ubuntu.
 
-This follows the same model as Mozilla Firefox, Blender, and Canonical Ubuntu: **open code, managed brand**.
-
-Full policy: [[Brand and Trademark Policy]]
+Full policy: [Brand and Trademark Policy](docs/02_STRATEGY/Brand%20and%20Trademark%20Policy.md)
 
 ---
 
 ## License
 
-License: **TBD** (under consideration: MIT / Apache-2.0 / GPL-3.0)
-
-The license decision will be made and documented before the first public release. See [[Open Questions]] → SQ-01 for the current discussion.
+**TBD** — under consideration: MIT / Apache-2.0 / GPL-3.0. Decision will be made before first public release.
 
 ---
 
@@ -148,20 +186,18 @@ The license decision will be made and documented before the first public release
 
 The full strategic and architectural documentation lives in the `docs/` folder as an **Obsidian vault**. Start with:
 
-- [[00_INDEX]] — knowledge base index
-- [[Project Vision]] — why Rashamon exists
-- [[Product Philosophy]] — our decision-making filters
-- [[MVP Scope]] — what the first product includes
-- [[System Architecture]] — technical overview
-- [[Open Questions]] — unresolved decisions
+- [Index](docs/00_INDEX.md) — knowledge base index
+- [Project Vision](docs/01_VISION/Project%20Vision.md) — why Rashamon exists
+- [Product Philosophy](docs/01_VISION/Product%20Philosophy.md) — decision-making filters
+- [MVP Scope](docs/02_STRATEGY/MVP%20Scope.md) — what the first product includes
+- [System Architecture](docs/04_ARCHITECTURE/System%20Architecture.md) — technical overview
+- [Open Questions](docs/10_APPENDICES/Open%20Questions.md) — unresolved decisions
 
 ---
 
 ## Status
 
-**Early stage.** This project is in the foundation phase. No working product yet — strategy and architecture first, code second.
-
-Follow this repository for updates.
+**Early stage.** The monorepo is bootstrapped and the app shell renders. No rendering engine yet — canvas is a placeholder. Next: scene graph and basic tools.
 
 ---
 
