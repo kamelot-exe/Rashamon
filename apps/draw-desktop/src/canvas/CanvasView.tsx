@@ -24,6 +24,7 @@ import {
   deleteSelected,
   groupSelected,
   ungroupSelected,
+  pushHistory,
 } from '../store/documentStore.js';
 import {
   handleMouseDown,
@@ -161,60 +162,165 @@ export const CanvasView: FC = () => {
   }, []);
 
   // Multi-selection resize handler
+  // Uses proportional scaling from the shared selection center.
+  // Shift key locks aspect ratio.
   const handleMultiResize = useCallback(
-    (_nodeIds: string[], handle: string, dx: number, dy: number, _shiftKey: boolean, isStart: boolean, isEnd: boolean) => {
-      const pushHistory = isStart;
+    (_nodeIds: string[], handle: string, dx: number, dy: number, shiftKey: boolean, isStart: boolean, isEnd: boolean) => {
+      if (isStart) pushHistory();
       const selectedNodes = getSelectedNodes();
+      if (selectedNodes.length === 0) return;
 
-      const stepX = (_shiftKey || snapToGrid) ? Math.round(dx / gridSize) * gridSize : dx;
-      const stepY = (_shiftKey || snapToGrid) ? Math.round(dy / gridSize) * gridSize : dy;
-
+      // Compute union bounds
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const node of selectedNodes) {
-        if (node.type !== 'shape') continue;
-        const geo = node.geometry;
+        const b = getNodeBoundsSimple(node);
+        minX = Math.min(minX, b.x);
+        minY = Math.min(minY, b.y);
+        maxX = Math.max(maxX, b.x + b.w);
+        maxY = Math.max(maxY, b.y + b.h);
+      }
 
-        if (geo.type === 'rect') {
-          const isLeft = handle.includes('l');
-          const isTop = handle.includes('t');
-          const isRight = handle.includes('r') && !handle.includes('m');
-          const isBottom = handle.includes('b') && !handle.includes('l');
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const origW = maxX - minX;
+      const origH = maxY - minY;
 
-          let newX = node.transform.x;
-          let newY = node.transform.y;
-          let newW = geo.width;
-          let newH = geo.height;
+      // Calculate scale factors based on handle position
+      let scaleX = 1, scaleY = 1;
 
-          if (isLeft) { newX += stepX; newW -= stepX; }
-          if (isRight) { newW += stepX; }
-          if (isTop) { newY += stepY; newH -= stepY; }
-          if (isBottom) { newH += stepY; }
+      if (origW > 0 && origH > 0) {
+        const isLeft = handle.includes('l');
+        const isRight = handle.includes('r') && !handle.includes('m');
+        const isTop = handle.includes('t');
+        const isBottom = handle.includes('b') && !handle.includes('l');
 
-          if (newW < 1) { newW = 1; if (isLeft) newX = node.transform.x + geo.width - 1; }
-          if (newH < 1) { newH = 1; if (isTop) newY = node.transform.y + geo.height - 1; }
+        // Determine new dimensions
+        let newW = origW, newH = origH;
 
-          resizeNode(node.id, { type: 'rect', width: newW, height: newH }, pushHistory);
-          updateTransform(node.id, { x: newX, y: newY });
-        } else if (geo.type === 'ellipse') {
-          const newRx = Math.max(1, geo.rx + stepX / 2);
-          const newRy = Math.max(1, geo.ry + stepY / 2);
-          resizeNode(node.id, { type: 'ellipse', rx: newRx, ry: newRy }, pushHistory);
-        } else if (geo.type === 'line') {
-          const lineGeo = geo as import('@rashamon/types').LineGeometry;
-          resizeNode(node.id, { type: 'line', x1: lineGeo.x1, y1: lineGeo.y1, x2: lineGeo.x2 + stepX, y2: lineGeo.y2 + stepY }, pushHistory);
+        if (isLeft || isRight) newW = origW + (isRight ? dx : -dx);
+        if (isTop || isBottom) newH = origH + (isBottom ? dy : -dy);
+
+        // Handle corner scales (both dimensions)
+        const isCorner = (isLeft || isRight) && (isTop || isBottom);
+        const isMiddle = !isCorner && (isLeft || isRight || isTop || isBottom);
+
+        if (isCorner) {
+          // Corner: scale both dimensions
+          const avgScale = (newW / origW + newH / origH) / 2;
+          if (shiftKey) {
+            // Shift: lock aspect ratio
+            scaleX = scaleY = avgScale;
+          } else {
+            scaleX = newW / origW;
+            scaleY = newH / origH;
+          }
+        } else if (isMiddle) {
+          // Middle handle: scale one axis
+          if (isLeft || isRight) {
+            scaleX = newW / origW;
+            scaleY = shiftKey ? scaleX : 1;
+          } else {
+            scaleY = newH / origH;
+            scaleX = shiftKey ? scaleY : 1;
+          }
+        }
+
+        // Apply transforms
+        for (const node of selectedNodes) {
+          const b = getNodeBoundsSimple(node);
+          const nodeCenterX = b.x + b.w / 2;
+          const nodeCenterY = b.y + b.h / 2;
+
+          // Scale from selection center
+          const newW = Math.max(1, b.w * scaleX);
+          const newH = Math.max(1, b.h * scaleY);
+          const newX = centerX + (nodeCenterX - centerX) * scaleX - newW / 2;
+          const newY = centerY + (nodeCenterY - centerY) * scaleY - newH / 2;
+
+          if (node.type === 'shape') {
+            const geo = node.geometry;
+            if (geo.type === 'rect') {
+              resizeNode(node.id, { type: 'rect', width: newW, height: newH }, false);
+              updateTransform(node.id, { x: newX, y: newY });
+            } else if (geo.type === 'ellipse') {
+              resizeNode(node.id, { type: 'ellipse', rx: newW / 2, ry: newH / 2 }, false);
+              updateTransform(node.id, { x: newX + newW / 2, y: newY + newH / 2 });
+            } else if (geo.type === 'line') {
+              const lineGeo = geo as import('@rashamon/types').LineGeometry;
+              const newX2 = centerX + (lineGeo.x2 - centerX) * scaleX;
+              const newY2 = centerY + (lineGeo.y2 - centerY) * scaleY;
+              resizeNode(node.id, { type: 'line', x1: lineGeo.x1, y1: lineGeo.y1, x2: newX2, y2: newY2 }, false);
+            }
+          }
         }
       }
 
       if (isEnd) isResizing.current = false;
       else isResizing.current = true;
     },
-    [snapToGrid]
+    []
   );
 
-  // Multi-selection rotate handler
-  const handleMultiRotate = useCallback((nodeIds: string[], angle: number, isStart: boolean, isEnd: boolean) => {
-    for (const id of nodeIds) {
-      rotateNode(id, angle, isStart);
+  // Helper: get simple node bounds
+  function getNodeBoundsSimple(node: import('@rashamon/types').SceneNode): { x: number; y: number; w: number; h: number } {
+    const { x, y } = node.transform;
+    let w = 0, h = 0;
+    if (node.type === 'shape') {
+      const shape = node as import('@rashamon/types').ShapeSceneNode;
+      if (shape.geometry.type === 'rect') {
+        w = shape.geometry.width; h = shape.geometry.height;
+      } else if (shape.geometry.type === 'ellipse') {
+        w = shape.geometry.rx * 2; h = shape.geometry.ry * 2;
+      } else if (shape.geometry.type === 'line') {
+        w = Math.abs(shape.geometry.x2 - shape.geometry.x1);
+        h = Math.abs(shape.geometry.y2 - shape.geometry.y1);
+      }
+    } else if (node.type === 'text') {
+      const textNode = node as import('@rashamon/types').TextSceneNode;
+      w = textNode.content.length * textNode.fontSize * 0.6;
+      h = textNode.fontSize;
     }
+    return { x, y, w, h };
+  }
+
+  // Multi-selection rotate handler
+  // Rotates all selected nodes around the shared centroid.
+  const handleMultiRotate = useCallback((_nodeIds: string[], angle: number, isStart: boolean, isEnd: boolean) => {
+    if (isStart) pushHistory();
+    const selectedNodes = getSelectedNodes();
+    if (selectedNodes.length === 0) return;
+
+    // Compute centroid
+    let cx = 0, cy = 0;
+    for (const node of selectedNodes) {
+      const b = getNodeBoundsSimple(node);
+      cx += b.x + b.w / 2;
+      cy += b.y + b.h / 2;
+    }
+    cx /= selectedNodes.length;
+    cy /= selectedNodes.length;
+
+    for (const node of selectedNodes) {
+      const b = getNodeBoundsSimple(node);
+      const nodeCx = b.x + b.w / 2;
+      const nodeCy = b.y + b.h / 2;
+
+      // Vector from centroid to node center
+      const dx = nodeCx - cx;
+      const dy = nodeCy - cy;
+
+      // Rotate vector
+      const rad = angle * Math.PI / 180;
+      const newDx = dx * Math.cos(rad) - dy * Math.sin(rad);
+      const newDy = dx * Math.sin(rad) + dy * Math.cos(rad);
+
+      updateTransform(node.id, {
+        x: node.transform.x + (newDx - dx),
+        y: node.transform.y + (newDy - dy),
+        rotation: node.transform.rotation + angle,
+      });
+    }
+
     if (isEnd) isRotating.current = false;
     else isRotating.current = true;
   }, []);

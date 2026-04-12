@@ -26,19 +26,20 @@ import {
   Vec2,
 } from '@rashamon/types';
 import { createDocument } from '@rashamon/core';
+import {
+  createBranchingHistory,
+  pushState,
+  undo as graphUndo,
+  redo as graphRedo,
+  getCurrentDocument,
+  canUndo as graphCanUndo,
+  canRedo as graphCanRedo,
+  getHistoryStats,
+  type BranchingHistory,
+  type HistoryNode,
+} from './branchingHistory.js';
 
-// ─── History (temporary: snapshot-based linear undo/redo) ──
-// NOTE: This is a temporary approach. The final system will use
-// graph-based history (Phase 5). The snapshot strategy is explicit
-// here so it can be cleanly replaced later.
-
-interface HistoryState {
-  past: RashamonDocument[];
-  present: RashamonDocument;
-  future: RashamonDocument[];
-}
-
-const MAX_HISTORY = 100;
+// ─── Helpers ─────────────────────────────────────────────────
 
 function snapshot(doc: RashamonDocument): RashamonDocument {
   return JSON.parse(JSON.stringify(doc));
@@ -47,7 +48,7 @@ function snapshot(doc: RashamonDocument): RashamonDocument {
 // ─── Store ───────────────────────────────────────────────────
 
 export interface DocumentStore {
-  history: HistoryState;
+  history: BranchingHistory;
   selectedIds: Set<NodeId>;
   listeners: Set<() => void>;
 }
@@ -55,11 +56,7 @@ export interface DocumentStore {
 function createInitialStore(): DocumentStore {
   const doc = createDocument('Untitled');
   return {
-    history: {
-      past: [],
-      present: doc,
-      future: [],
-    },
+    history: createBranchingHistory(doc),
     selectedIds: new Set(),
     listeners: new Set(),
   };
@@ -85,7 +82,7 @@ function notify(): void {
 // ─── Getters ─────────────────────────────────────────────────
 
 export function getDocument(): RashamonDocument {
-  return store.history.present;
+  return getCurrentDocument(store.history);
 }
 
 export function getSelectedId(): NodeId | null {
@@ -98,7 +95,7 @@ export function getSelectedIds(): Set<NodeId> {
 }
 
 export function getSelectedNodes(): SceneNode[] {
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   const nodes: SceneNode[] = [];
   for (const id of store.selectedIds) {
     const node = findNode(doc.root, id);
@@ -108,74 +105,73 @@ export function getSelectedNodes(): SceneNode[] {
 }
 
 export function getSelectedNode(): SceneNode | null {
-  return getSelectedId() ? findNode(store.history.present.root, getSelectedId()!) : null;
+  return getSelectedId() ? findNode(getCurrentDocument(store.history).root, getSelectedId()!) : null;
 }
 
 // ─── Actions (push to undo stack) ────────────────────────────
 
-function pushHistory(): void {
-  const { past, present } = store.history;
-  const newPast = [...past, snapshot(present)];
-  if (newPast.length > MAX_HISTORY) {
-    newPast.shift();
-  }
-  store.history = {
-    past: newPast,
-    present: snapshot(present),
-    future: [],
-  };
+export function pushHistory(): void {
+  const doc = getCurrentDocument(store.history);
+  pushState(store.history, snapshot(doc));
 }
 
 export function undo(): boolean {
-  const { past, present, future } = store.history;
-  if (past.length === 0) return false;
-  const prev = past[past.length - 1];
-  store.history = {
-    past: past.slice(0, -1),
-    present: snapshot(prev),
-    future: [snapshot(present), ...future],
-  };
-  store.selectedIds.clear();
-  notify();
-  return true;
+  const result = graphUndo(store.history);
+  if (result) {
+    store.selectedIds.clear();
+    notify();
+  }
+  return result;
 }
 
 export function redo(): boolean {
-  const { past, present, future } = store.history;
-  if (future.length === 0) return false;
-  const next = future[0];
-  store.history = {
-    past: [...past, snapshot(present)],
-    present: snapshot(next),
-    future: future.slice(1),
-  };
-  notify();
-  return true;
+  const result = graphRedo(store.history);
+  if (result) notify();
+  return result;
 }
 
 export function canUndo(): boolean {
-  return store.history.past.length > 0;
+  return graphCanUndo(store.history);
 }
 
 export function canRedo(): boolean {
-  return store.history.future.length > 0;
+  return graphCanRedo(store.history);
+}
+
+/**
+ * Get history statistics (for dev/debug UI).
+ */
+export function getHistoryStatsExport() {
+  return getHistoryStats(store.history);
+}
+
+/**
+ * Get current history node info.
+ */
+export function getCurrentHistoryNode(): HistoryNode | null {
+  const stats = getHistoryStats(store.history);
+  const currentDoc = getCurrentDocument(store.history);
+  return {
+    id: store.history.currentId,
+    document: currentDoc,
+    parentId: null,
+    children: [],
+    timestamp: new Date().toISOString(),
+    isBranchPoint: !stats.isOnMainBranch,
+  };
 }
 
 // ─── Document operations ─────────────────────────────────────
 
 export function newDocument(title?: string): void {
-  pushHistory();
-  store.history.present = createDocument(title || 'Untitled');
+  const doc = createDocument(title || 'Untitled');
+  store.history = createBranchingHistory(doc);
   store.selectedIds.clear();
   notify();
 }
 
 export function setDocument(doc: RashamonDocument): void {
-  store.history = {
-    past: [],
-    present: doc,
-    future: [],
-  };
+  store.history = createBranchingHistory(doc);
   store.selectedIds.clear();
   notify();
 }
@@ -187,10 +183,11 @@ export function addShapeNode(
   name: string,
   fill: Fill | null = null,
   stroke: Stroke | null = null,
-  position?: Vec2
+  position?: Vec2,
+  semanticRole?: import('@rashamon/types').SemanticRole
 ): NodeId {
   pushHistory();
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   const id = generateId();
 
   const node: ShapeSceneNode = {
@@ -205,6 +202,7 @@ export function addShapeNode(
     locked: false,
     opacity: 1,
     semanticTags: [],
+    semanticRole,
   };
 
   doc.root.children.push(node);
@@ -221,7 +219,7 @@ export function addTextNode(
   fill: string = '#FFFFFF'
 ): NodeId {
   pushHistory();
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   const id = generateId();
 
   const node: TextSceneNode = {
@@ -247,7 +245,7 @@ export function addTextNode(
 
 export function updateTextContent(id: NodeId, content: string): void {
   pushHistory();
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   const node = findNode(doc.root, id);
   if (!node || node.type !== 'text') return;
   node.content = content;
@@ -256,7 +254,7 @@ export function updateTextContent(id: NodeId, content: string): void {
 
 export function updateTextProperties(id: NodeId, props: Partial<Pick<TextSceneNode, 'fontSize' | 'fontFamily' | 'fill'>>): void {
   pushHistory();
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   const node = findNode(doc.root, id);
   if (!node || node.type !== 'text') return;
   Object.assign(node, props);
@@ -281,7 +279,7 @@ export function selectNodes(ids: NodeId[]): void {
   store.selectedIds.clear();
   for (const id of ids) {
     // Only select nodes that still exist in the document
-    if (findNode(store.history.present.root, id)) {
+    if (findNode(getCurrentDocument(store.history).root, id)) {
       store.selectedIds.add(id);
     }
   }
@@ -333,7 +331,7 @@ export function isSelected(id: NodeId): boolean {
 
 export function updateTransform(id: NodeId, transform: Partial<Transform>): void {
   pushHistory();
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   const node = findNode(doc.root, id);
   if (!node) return;
   node.transform = { ...node.transform, ...transform };
@@ -344,7 +342,7 @@ export function resizeNode(id: NodeId, geometry: Partial<RectGeometry | EllipseG
   if (pushHistoryFlag) {
     pushHistory();
   }
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   const node = findNode(doc.root, id);
   if (!node || node.type !== 'shape') return;
 
@@ -369,7 +367,7 @@ export function rotateNode(id: NodeId, angle: number, pushHistoryFlag: boolean =
   if (pushHistoryFlag) {
     pushHistory();
   }
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   const node = findNode(doc.root, id);
   if (!node) return;
   node.transform.rotation = (node.transform.rotation + angle) % 360;
@@ -378,7 +376,7 @@ export function rotateNode(id: NodeId, angle: number, pushHistoryFlag: boolean =
 
 export function updateNodeName(id: NodeId, name: string): void {
   pushHistory();
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   const node = findNode(doc.root, id);
   if (!node) return;
   node.name = name;
@@ -387,7 +385,7 @@ export function updateNodeName(id: NodeId, name: string): void {
 
 export function updateFill(id: NodeId, fill: Fill | null): void {
   pushHistory();
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   const node = findNode(doc.root, id);
   if (!node || node.type !== 'shape') return;
   node.fill = fill;
@@ -396,10 +394,19 @@ export function updateFill(id: NodeId, fill: Fill | null): void {
 
 export function updateStroke(id: NodeId, stroke: Stroke | null): void {
   pushHistory();
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   const node = findNode(doc.root, id);
   if (!node || node.type !== 'shape') return;
   node.stroke = stroke;
+  notify();
+}
+
+export function updateSemanticRole(id: NodeId, role: import('@rashamon/types').SemanticRole | undefined): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, id);
+  if (!node) return;
+  node.semanticRole = role;
   notify();
 }
 
@@ -413,7 +420,7 @@ export function deleteNode(id: NodeId): void {
 export function deleteNodes(ids: NodeId[]): void {
   if (ids.length === 0) return;
   pushHistory();
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   for (const id of ids) {
     removeNode(doc.root, id);
     store.selectedIds.delete(id);
@@ -440,7 +447,7 @@ export function groupSelected(): NodeId | null {
   if (store.selectedIds.size < 2) return null;
 
   pushHistory();
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   const selectedIds = Array.from(store.selectedIds);
 
   // Find nodes and group by common parent
@@ -453,8 +460,6 @@ export function groupSelected(): NodeId | null {
   }
 
   if (nodesToGroup.length < 2) {
-    // Rollback history push
-    store.history.past.pop();
     return null;
   }
 
@@ -477,7 +482,6 @@ export function groupSelected(): NodeId | null {
   }
 
   if (!bestParent || bestItems.length < 2) {
-    store.history.past.pop();
     return null;
   }
 
@@ -519,14 +523,14 @@ export function groupSelected(): NodeId | null {
  */
 export function ungroupSelected(): void {
   const selectedGroups = Array.from(store.selectedIds).filter((id) => {
-    const node = findNode(store.history.present.root, id);
+    const node = findNode(getCurrentDocument(store.history).root, id);
     return node && node.type === 'group';
   });
 
   if (selectedGroups.length === 0) return;
 
   pushHistory();
-  const doc = store.history.present;
+  const doc = getCurrentDocument(store.history);
   const newSelection: NodeId[] = [];
 
   for (const groupId of selectedGroups) {
@@ -554,6 +558,63 @@ export function ungroupSelected(): void {
   notify();
 }
 
+// ─── Group Scope (Enter/Exit) ───────────────────────────────
+
+let editScopeGroupId: NodeId | null = null;
+
+/**
+ * Enter a group for focused editing.
+ * Selection and layers panel will operate within this group.
+ */
+export function enterGroup(groupId: NodeId): boolean {
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, groupId);
+  if (!node || node.type !== 'group') return false;
+
+  editScopeGroupId = groupId;
+  notify();
+  return true;
+}
+
+/**
+ * Exit current group scope, returning to parent scope.
+ */
+export function exitGroup(): void {
+  editScopeGroupId = null;
+  notify();
+}
+
+/**
+ * Get current edit scope group ID.
+ * null means editing at document root level.
+ */
+export function getEditScopeGroupId(): NodeId | null {
+  return editScopeGroupId;
+}
+
+/**
+ * Get nodes within current edit scope.
+ * If no scope is set, returns root children.
+ */
+export function getScopedNodes(): SceneNode[] {
+  const doc = getCurrentDocument(store.history);
+  if (!editScopeGroupId) return doc.root.children;
+
+  const group = findNode(doc.root, editScopeGroupId);
+  if (!group || group.type !== 'group') return doc.root.children;
+  return (group as GroupSceneNode).children;
+}
+
+/**
+ * Get the current edit scope group node (or null for root).
+ */
+export function getEditScopeGroup(): GroupSceneNode | null {
+  if (!editScopeGroupId) return null;
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, editScopeGroupId);
+  return (node && node.type === 'group') ? node as GroupSceneNode : null;
+}
+
 // ─── Flat node list for layers panel ────────────────────────
 
 export interface FlatNode {
@@ -566,7 +627,7 @@ export interface FlatNode {
 
 export function getFlatNodeList(): FlatNode[] {
   const result: FlatNode[] = [];
-  flatten(store.history.present.root, 0, result);
+  flatten(getCurrentDocument(store.history).root, 0, result);
   return result;
 }
 
