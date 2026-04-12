@@ -12,7 +12,7 @@
 
 import { FC, useEffect, useState } from 'react';
 import type { ShapeSceneNode, TextSceneNode, RectGeometry, EllipseGeometry, LineGeometry } from '@rashamon/types';
-import { subscribe, getSelectedId, getSelectedIds, getSelectedNode, updateTransform, updateNodeName, updateTextContent, updateTextProperties, updateFill, updateStroke, alignSelected, distributeSelected } from '../store/documentStore.js';
+import { subscribe, getSelectedId, getSelectedIds, getSelectedNode, updateTransform, updateNodeName, updateTextContent, updateTextProperties, updateFill, updateStroke, alignSelected, distributeSelected, updateSemanticRole } from '../store/documentStore.js';
 import './PropertiesPanel.css';
 
 export const PropertiesPanel: FC = () => {
@@ -372,6 +372,31 @@ export const PropertiesPanel: FC = () => {
             <span className="prop-value" style={{ fontSize: '11px' }}>px</span>
           </div>
         </div>
+
+        {/* Semantic Role */}
+        <div className="prop-group">
+          <label className="prop-label">Semantic Role</label>
+          <select
+            className="prop-input prop-input--select"
+            value={typeof shape.semanticRole === 'string' ? shape.semanticRole : 'none'}
+            onChange={(e) => {
+              const val = e.target.value;
+              const role = val === 'none' ? undefined : val as import('@rashamon/types').SemanticRole;
+              updateSemanticRole(selectedId, role);
+            }}
+          >
+            <option value="none">None</option>
+            <option value="background">Background</option>
+            <option value="foreground">Foreground</option>
+            <option value="annotation">Annotation</option>
+            <option value="guide">Guide</option>
+          </select>
+          {shape.semanticRole && typeof shape.semanticRole === 'string' && (
+            <span className="role-badge" role="img" aria-label={`Role: ${shape.semanticRole}`}>
+              {getRoleIcon(shape.semanticRole)} {shape.semanticRole}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Align / Distribute — only visible with multi-selection */}
@@ -405,3 +430,18 @@ export const PropertiesPanel: FC = () => {
     </div>
   );
 };
+
+function getRoleIcon(role: import('@rashamon/types').SemanticRole): string {
+  if (typeof role === 'string') {
+    switch (role) {
+      case 'background': return '🖼';
+      case 'foreground': return '🔝';
+      case 'annotation': return '💬';
+      case 'guide': return '📐';
+      default: return '·';
+    }
+  }
+  if ('uiElement' in role) return '🔘';
+  if ('custom' in role) return '🏷';
+  return '·';
+}

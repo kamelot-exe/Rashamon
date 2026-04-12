@@ -1,0 +1,64 @@
+/* ─── Scope Bar ──────────────────────────────────────────────── */
+
+.scope-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: #282840;
+  border-bottom: 1px solid #3a3a5c;
+  font-size: 12px;
+  min-height: 28px;
+}
+
+.scope-bar--active {
+  background: rgba(108, 123, 255, 0.1);
+  border-bottom-color: #6c7bff;
+}
+
+.scope-bar__path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+}
+
+.scope-bar__root {
+  color: #6a6a8a;
+  font-size: 11px;
+}
+
+.scope-bar__separator {
+  color: #3a3a5c;
+  font-size: 14px;
+}
+
+.scope-bar__current {
+  color: #a0a0ff;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.scope-bar__hint {
+  color: #4a4a6c;
+  font-size: 10px;
+  font-style: italic;
+}
+
+.scope-bar__exit {
+  background: transparent;
+  border: 1px solid #3a3a5c;
+  border-radius: 3px;
+  color: #a0a0c0;
+  padding: 2px 8px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  font-family: inherit;
+}
+
+.scope-bar__exit:hover {
+  background: #3e3e60;
+  border-color: #6c7bff;
+  color: #e0e0f0;
+}

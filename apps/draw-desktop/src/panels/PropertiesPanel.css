@@ -109,6 +109,24 @@
   font-family: var(--font-mono);
 }
 
+.prop-input--select {
+  appearance: auto;
+  cursor: pointer;
+}
+
+/* Role badge */
+.role-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 6px;
+  background: rgba(108, 123, 255, 0.1);
+  border: 1px solid rgba(108, 123, 255, 0.3);
+  border-radius: 3px;
+  font-size: 10px;
+  color: #a0a0ff;
+  font-family: var(--font-mono);
+}
+
 /* Align buttons */
 .align-buttons {
   display: flex;

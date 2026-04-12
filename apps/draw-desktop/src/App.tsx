@@ -17,9 +17,10 @@ import { useEffect, useState, FC } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { ToolButtons } from './tools/ToolButtons.js';
 import { LayersPanel } from './panels/LayersPanel.js';
+import { HistoryPanel } from './panels/HistoryPanel.js';
 import { PropertiesPanel } from './panels/PropertiesPanel.js';
 import { CanvasView } from './canvas/CanvasView.js';
-import { getDocument, subscribe, canUndo, canRedo, undo, redo } from './store/documentStore.js';
+import { getDocument, subscribe, canUndo, canRedo, undo, redo, getHistoryStatsExport, getEditScopeGroup } from './store/documentStore.js';
 import { handleNewDocument, handleSaveDocument, handleOpenDocument, handleExportSvg, handleExportPng } from './utils/fileOps.js';
 import { resetTransform } from './store/canvasTransformStore.js';
 import './styles/global.css';
@@ -106,9 +107,15 @@ const TopBar: FC = () => {
 const StatusBar: FC = () => {
   const doc = getDocument();
   const [, forceUpdate] = useState(0);
+  const [historyStats, setHistoryStats] = useState({ depth: 1, branchPoints: 0, isOnMainBranch: true, totalNodes: 1 });
+  const [scopeGroup, setScopeGroup] = useState<{ name: string } | null>(null);
 
   useEffect(() => {
-    return subscribe(() => forceUpdate((n) => n + 1));
+    return subscribe(() => {
+      setHistoryStats(getHistoryStatsExport());
+      setScopeGroup(getEditScopeGroup());
+      forceUpdate((n) => n + 1);
+    });
   }, []);
 
   const objectCount = doc.root.children.length;
@@ -119,6 +126,20 @@ const StatusBar: FC = () => {
         <span className="statusbar__item">Ready</span>
         <span className="statusbar__separator">|</span>
         <span className="statusbar__item">{objectCount} object{objectCount !== 1 ? 's' : ''}</span>
+        {scopeGroup && (
+          <>
+            <span className="statusbar__separator">|</span>
+            <span className="statusbar__item statusbar__item--scope">In group: {scopeGroup.name}</span>
+          </>
+        )}
+        {historyStats.branchPoints > 0 && (
+          <>
+            <span className="statusbar__separator">|</span>
+            <span className="statusbar__item" title={`History depth: ${historyStats.depth}, Total nodes: ${historyStats.totalNodes}`}>
+              📊 {historyStats.depth} steps
+            </span>
+          </>
+        )}
       </div>
       <div className="statusbar__right">
         <span className="statusbar__item">{doc.canvas.width} × {doc.canvas.height}</span>
@@ -159,6 +180,7 @@ export function App() {
           <ToolButtons />
           <div className="app-sidebar__divider" />
           <LayersPanel />
+          <HistoryPanel />
         </aside>
 
         {/* Center: canvas */}

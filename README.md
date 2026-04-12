@@ -197,20 +197,41 @@ The full strategic and architectural documentation lives in the `docs/` folder a
 
 ## Status
 
-**Phase 2C complete.** The editor now has full usability for daily vector work:
+**Phase 3B complete.** The editor now has creative graph foundations with visible UI:
 
 ### Core Features
 - ✅ SVG canvas renders rectangles, ellipses, lines, text
 - ✅ Select tool: click to select, drag to move
 - ✅ Rectangle/Ellipse/Line tools: click-drag to create
 - ✅ Text tool: click to create, double-click to edit inline (no browser prompt)
-- ✅ Properties panel: edit x, y, width, height, rotation, fill, stroke
+- ✅ Properties panel: edit x, y, width, height, rotation, fill, stroke, semantic role
 - ✅ Fill/stroke editing with color picker and stroke width control
 - ✅ Layers panel: reflects document nodes, select/delete
 - ✅ Save/Open .rdraw files (with fallback download)
 - ✅ Export SVG (clean markup from document)
 - ✅ Export PNG (canvas rasterization)
-- ✅ Linear undo/redo (Ctrl+Z / Ctrl+Shift+Z)
+
+### History & Branching
+- ✅ Branching history foundation (DAG-based, not linear)
+- ✅ History panel showing depth, node count, branch count
+- ✅ Branch indicator (main vs forked)
+- ✅ Navigate backward/forward via panel buttons or keyboard
+- ⚠️ Visual graph history UI — groundwork only, not full visualization
+- ⚠️ History is in-memory only; not persisted in save/load (by design)
+
+### Group Scope Editing
+- ✅ Double-click group to enter focused editing
+- ✅ Scope bar shows current path (Root → Group Name)
+- ✅ Exit button to return to parent scope
+- ✅ Escape key exits group
+- ✅ Canvas editing acts within scope
+- ✅ Layers panel reflects scope
+
+### Semantic Roles
+- ✅ Semantic role editor in PropertiesPanel
+- ✅ Supported roles: background, foreground, annotation, guide, ui-element, custom
+- ✅ Roles persist in save/load (part of SceneNode serialization)
+- ✅ Role badge display in inspector
 
 ### Zoom & Pan
 - ✅ Mouse wheel zoom (centered on cursor)
@@ -240,12 +261,16 @@ The full strategic and architectural documentation lives in the `docs/` folder a
 | `Ctrl+0` | Reset view |
 | `Delete` / `Backspace` | Delete selected |
 | `Ctrl+Z` | Undo |
-| `Ctrl+Shift+Z` | Redo |
+| `Ctrl+Y` / `Ctrl+Shift+Z` | Redo |
+| `Ctrl+G` | Group selected |
+| `Ctrl+Shift+G` | Ungroup selected |
+| `Escape` | Exit group scope / Close text editor |
 | `Double-click text` | Edit inline |
+| `Double-click group` | Enter group focused editing |
 
-**Not yet implemented:** pen/path editing, boolean operations, gradient fills, plugin system, branching history, semantic canvas, graph-based undo/redo, PNG font rendering edge cases.
+**Not yet implemented:** pen/path editing, boolean operations, gradient fills, plugin system, visual history graph UI, branch merging, history persistence in save/load, semantic canvas querying.
 
-Next: Phase 3 — differentiators v1 (semantic roles, branching history, plugin foundation).
+Next: Phase 4 — differentiators v2 (semantic canvas, plugin foundation, visual history graph).
 
 ---
 

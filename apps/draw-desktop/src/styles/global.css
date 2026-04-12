@@ -210,6 +210,10 @@ body {
   color: #3a3a5c;
 }
 
+.statusbar__item--scope {
+  color: #a0a0ff;
+}
+
 /* ─── Scrollbar ─────────────────────────────────────────────── */
 
 ::-webkit-scrollbar {

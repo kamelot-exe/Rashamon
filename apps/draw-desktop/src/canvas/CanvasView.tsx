@@ -25,6 +25,11 @@ import {
   groupSelected,
   ungroupSelected,
   pushHistory,
+  enterGroup,
+  exitGroup,
+  getEditScopeGroupId,
+  getScopedNodes,
+  redo,
 } from '../store/documentStore.js';
 import {
   handleMouseDown,
@@ -35,6 +40,7 @@ import {
 } from '../tools/toolSystem.js';
 import { renderSceneNodes, SelectionOverlay, MultiSelectionOverlay } from './SvgCanvas.js';
 import { InlineTextEditor } from './InlineTextEditor.js';
+import { ScopeBar } from './ScopeBar.js';
 import {
   getCanvasTransform,
   setPan,
@@ -48,7 +54,7 @@ import './CanvasView.css';
 export const CanvasView: FC = () => {
   const doc = getDocument();
   const selectedId = getSelectedId();
-  const nodes = doc.root.children;
+  const nodes = getScopedNodes();
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [, forceUpdate] = useState(0);
@@ -395,6 +401,17 @@ export const CanvasView: FC = () => {
             }
           }
           break;
+        case 'y':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            redo();
+          }
+          break;
+        case 'escape':
+          if (getEditScopeGroupId()) {
+            exitGroup();
+          }
+          break;
         case 'z':
           if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
@@ -469,6 +486,9 @@ export const CanvasView: FC = () => {
       const node = findNodeById(doc.root, nodeId!);
       if (node && node.type === 'text') {
         setEditingTextId(nodeId);
+      } else if (node && node.type === 'group') {
+        // Double-click group to enter focused editing
+        enterGroup(nodeId!);
       }
     }
   }, [doc.root]);
@@ -486,6 +506,9 @@ export const CanvasView: FC = () => {
 
   return (
     <div className="canvas-view">
+      {/* Scope bar: shows current edit scope and exit button */}
+      <ScopeBar />
+
       <div className="canvas-scroll">
         <svg
           ref={svgRef}
