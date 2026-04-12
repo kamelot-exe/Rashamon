@@ -12,7 +12,7 @@
 
 import { FC, useEffect, useState } from 'react';
 import type { ShapeSceneNode, TextSceneNode, RectGeometry, EllipseGeometry, LineGeometry } from '@rashamon/types';
-import { subscribe, getSelectedId, getSelectedNode, updateTransform, updateNodeName, updateTextContent, updateTextProperties } from '../store/documentStore.js';
+import { subscribe, getSelectedId, getSelectedNode, updateTransform, updateNodeName, updateTextContent, updateTextProperties, updateFill, updateStroke } from '../store/documentStore.js';
 import './PropertiesPanel.css';
 
 export const PropertiesPanel: FC = () => {
@@ -312,27 +312,63 @@ export const PropertiesPanel: FC = () => {
         {/* Fill */}
         <div className="prop-group">
           <label className="prop-label">Fill</label>
-          <div className="prop-row">
-            {shape.fill ? (
-              <div className="color-swatch" style={{ backgroundColor: shape.fill.color }} />
-            ) : (
-              <span className="prop-value">none</span>
-            )}
+          <div className="prop-row" style={{ alignItems: 'center', gap: '8px' }}>
+            <input
+              className="prop-input"
+              type="color"
+              value={shape.fill?.color ?? '#000000'}
+              onChange={(e) =>
+                updateFill(selectedId, shape.fill ? { ...shape.fill, color: e.target.value } : { type: 'solid', color: e.target.value })
+              }
+              style={{ width: '36px', height: '28px', padding: '1px', cursor: 'pointer' }}
+            />
+            <input
+              className="prop-input"
+              type="text"
+              value={shape.fill?.color ?? 'none'}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'none' || val === 'transparent') {
+                  updateFill(selectedId, null);
+                } else {
+                  updateFill(selectedId, shape.fill ? { ...shape.fill, color: val } : { type: 'solid', color: val });
+                }
+              }}
+              style={{ flex: 1 }}
+            />
           </div>
         </div>
 
         {/* Stroke */}
         <div className="prop-group">
           <label className="prop-label">Stroke</label>
-          <div className="prop-row">
-            {shape.stroke ? (
-              <>
-                <div className="color-swatch" style={{ backgroundColor: shape.stroke.color }} />
-                <span className="prop-value">{shape.stroke.width}px</span>
-              </>
-            ) : (
-              <span className="prop-value">none</span>
-            )}
+          <div className="prop-row" style={{ alignItems: 'center', gap: '8px' }}>
+            <input
+              className="prop-input"
+              type="color"
+              value={shape.stroke?.color ?? '#000000'}
+              onChange={(e) =>
+                updateStroke(selectedId, shape.stroke ? { ...shape.stroke, color: e.target.value } : { color: e.target.value, width: 1, lineCap: 'butt', lineJoin: 'miter' })
+              }
+              style={{ width: '36px', height: '28px', padding: '1px', cursor: 'pointer' }}
+            />
+            <input
+              className="prop-input prop-input--small"
+              type="number"
+              value={shape.stroke?.width ?? 0}
+              min={0}
+              max={50}
+              onChange={(e) => {
+                const w = Number(e.target.value);
+                if (w <= 0) {
+                  updateStroke(selectedId, null);
+                } else {
+                  updateStroke(selectedId, shape.stroke ? { ...shape.stroke, width: w } : { color: '#000000', width: w, lineCap: 'butt', lineJoin: 'miter' });
+                }
+              }}
+              style={{ width: '50px' }}
+            />
+            <span className="prop-value" style={{ fontSize: '11px' }}>px</span>
           </div>
         </div>
       </div>

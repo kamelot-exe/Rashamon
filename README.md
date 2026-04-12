@@ -197,20 +197,55 @@ The full strategic and architectural documentation lives in the `docs/` folder a
 
 ## Status
 
-**Early stage — Phase 2A complete.** The monorepo is bootstrapped, the app shell boots, and the first interactive editor foundation works:
+**Phase 2C complete.** The editor now has full usability for daily vector work:
 
-- ✅ SVG canvas renders rectangles, ellipses, lines
+### Core Features
+- ✅ SVG canvas renders rectangles, ellipses, lines, text
 - ✅ Select tool: click to select, drag to move
 - ✅ Rectangle/Ellipse/Line tools: click-drag to create
-- ✅ Properties panel: edit x, y, width, height, rotation
+- ✅ Text tool: click to create, double-click to edit inline (no browser prompt)
+- ✅ Properties panel: edit x, y, width, height, rotation, fill, stroke
+- ✅ Fill/stroke editing with color picker and stroke width control
 - ✅ Layers panel: reflects document nodes, select/delete
 - ✅ Save/Open .rdraw files (with fallback download)
+- ✅ Export SVG (clean markup from document)
+- ✅ Export PNG (canvas rasterization)
 - ✅ Linear undo/redo (Ctrl+Z / Ctrl+Shift+Z)
-- ✅ Keyboard shortcuts: V (select), R (rect), E (ellipse), L (line), Delete
 
-**Not yet implemented:** text rendering, pen tool, grid snap, boolean operations, gradient fills, plugin system, branching history.
+### Zoom & Pan
+- ✅ Mouse wheel zoom (centered on cursor)
+- ✅ Space+drag or middle mouse drag for pan
+- ✅ Ctrl+/Ctrl+ for zoom, Ctrl+0 for reset
+- ✅ Selection overlay and handles stay correct under zoom
 
-Next: Phase 2B — more tools, grid/snap, better selection handles.
+### Grid & Snap
+- ✅ Visible grid with toggle (G key)
+- ✅ Snap-to-grid for shape creation and movement (S key)
+- ✅ Shift key also enables snap during resize
+
+### Keyboard Shortcuts
+| Shortcut | Action |
+|---|---|
+| `V` | Select tool |
+| `R` | Rectangle tool |
+| `E` | Ellipse tool |
+| `L` | Line tool |
+| `T` | Text tool |
+| `G` | Toggle grid visibility |
+| `S` | Toggle snap-to-grid |
+| `Space+drag` | Pan canvas |
+| `Middle mouse drag` | Pan canvas |
+| `Mouse wheel` | Zoom (centered on cursor) |
+| `Ctrl++` / `Ctrl+-` | Zoom in/out |
+| `Ctrl+0` | Reset view |
+| `Delete` / `Backspace` | Delete selected |
+| `Ctrl+Z` | Undo |
+| `Ctrl+Shift+Z` | Redo |
+| `Double-click text` | Edit inline |
+
+**Not yet implemented:** pen/path editing, boolean operations, gradient fills, plugin system, branching history, semantic canvas, graph-based undo/redo, PNG font rendering edge cases.
+
+Next: Phase 3 — differentiators v1 (semantic roles, branching history, plugin foundation).
 
 ---
 

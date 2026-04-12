@@ -308,6 +308,24 @@ export function updateNodeName(id: NodeId, name: string): void {
   notify();
 }
 
+export function updateFill(id: NodeId, fill: Fill | null): void {
+  pushHistory();
+  const doc = store.history.present;
+  const node = findNode(doc.root, id);
+  if (!node || node.type !== 'shape') return;
+  node.fill = fill;
+  notify();
+}
+
+export function updateStroke(id: NodeId, stroke: Stroke | null): void {
+  pushHistory();
+  const doc = store.history.present;
+  const node = findNode(doc.root, id);
+  if (!node || node.type !== 'shape') return;
+  node.stroke = stroke;
+  notify();
+}
+
 export function deleteNode(id: NodeId): void {
   pushHistory();
   const doc = store.history.present;

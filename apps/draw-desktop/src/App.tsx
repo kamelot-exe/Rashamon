@@ -21,6 +21,7 @@ import { PropertiesPanel } from './panels/PropertiesPanel.js';
 import { CanvasView } from './canvas/CanvasView.js';
 import { getDocument, subscribe, canUndo, canRedo, undo, redo } from './store/documentStore.js';
 import { handleNewDocument, handleSaveDocument, handleOpenDocument, handleExportSvg, handleExportPng } from './utils/fileOps.js';
+import { resetTransform } from './store/canvasTransformStore.js';
 import './styles/global.css';
 
 // ─── TopBar ─────────────────────────────────────────────────
@@ -67,6 +68,13 @@ const TopBar: FC = () => {
           title="Redo (Ctrl+Shift+Z)"
         >
           Redo
+        </button>
+        <button
+          className="topbar__btn"
+          onClick={() => resetTransform()}
+          title="Reset zoom (Ctrl+0)"
+        >
+          Reset View
         </button>
       </div>
       <div className="topbar__export">

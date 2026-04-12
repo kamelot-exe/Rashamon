@@ -274,23 +274,112 @@ function escapeXml(str: string): string {
 /**
  * Export the current document as a PNG image.
  *
- * TODO: Implement proper PNG export via canvas rasterization.
- * Current approach: renders SVG to a hidden canvas and exports as PNG.
- * This works for most cases but may have issues with:
- * - Complex text rendering (font availability)
- * - Gradient fills (not yet implemented)
- * - Custom fonts (need font loading)
+ * Approach:
+ * 1. Generate SVG markup from document
+ * 2. Create a Blob URL from SVG
+ * 3. Load into an Image element
+ * 4. Draw onto an offscreen canvas
+ * 5. Export canvas as PNG
  *
- * Implementation plan for Phase 2:
- * 1. Create offscreen canvas with document dimensions
- * 2. Render SVG string to canvas using drawImage
- * 3. Handle font loading with document.fonts.ready
- * 4. Export canvas as PNG with configurable quality
- * 5. Add support for transparent background option
+ * Limitations:
+ * - Custom fonts may not render correctly if not loaded
+ * - External images referenced by nodes won't load
+ * - Gradients and patterns not yet supported
  */
 export async function handleExportPng(): Promise<boolean> {
-  // TODO: Implement proper PNG export
-  console.log('PNG export is a TODO for Phase 2');
-  alert('PNG export is not yet implemented. Please use SVG export for now.');
-  return false;
+  try {
+    const doc = getDocument();
+    const svgContent = generateSvgFromDocument(doc);
+
+    // Create image from SVG
+    const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const img = new Image();
+    img.width = doc.canvas.width;
+    img.height = doc.canvas.height;
+
+    return new Promise((resolve) => {
+      img.onload = async () => {
+        try {
+          // Create canvas and draw image
+          const canvas = document.createElement('canvas');
+          canvas.width = doc.canvas.width;
+          canvas.height = doc.canvas.height;
+          const ctx = canvas.getContext('2d');
+
+          if (!ctx) {
+            console.error('Could not get canvas context');
+            URL.revokeObjectURL(url);
+            resolve(false);
+            return;
+          }
+
+          // Fill background if set
+          if (doc.canvas.background) {
+            ctx.fillStyle = doc.canvas.background;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+
+          ctx.drawImage(img, 0, 0);
+
+          // Export as PNG
+          canvas.toBlob(async (pngBlob) => {
+            URL.revokeObjectURL(url);
+
+            if (!pngBlob) {
+              console.error('Could not create PNG blob');
+              resolve(false);
+              return;
+            }
+
+            // Try Tauri dialog save
+            try {
+              const filePath = await save({
+                filters: [
+                  {
+                    name: 'PNG Image',
+                    extensions: ['png'],
+                  },
+                ],
+                defaultPath: `${doc.metadata.title || 'export'}.png`,
+              });
+
+              if (filePath) {
+                // Convert blob to ArrayBuffer and write
+                const arrayBuffer = await pngBlob.arrayBuffer();
+                const uint8Array = new Uint8Array(arrayBuffer);
+                await writeTextFile(filePath, uint8Array as unknown as string);
+                resolve(true);
+              } else {
+                resolve(false);
+              }
+            } catch {
+              // Fallback: download as blob
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(pngBlob);
+              a.download = `${doc.metadata.title || 'export'}.png`;
+              a.click();
+              resolve(true);
+            }
+          }, 'image/png');
+        } catch (err) {
+          console.error('PNG export failed:', err);
+          URL.revokeObjectURL(url);
+          resolve(false);
+        }
+      };
+
+      img.onerror = () => {
+        console.error('Failed to load SVG for PNG export');
+        URL.revokeObjectURL(url);
+        resolve(false);
+      };
+
+      img.src = url;
+    });
+  } catch (err) {
+    console.error('PNG export failed:', err);
+    return false;
+  }
 }

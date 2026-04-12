@@ -28,6 +28,7 @@ import {
   getDocument,
   updateTransform,
 } from '../store/documentStore.js';
+import { screenToCanvas, getCanvasTransform } from '../store/canvasTransformStore.js';
 
 export type ToolType = 'select' | 'rectangle' | 'ellipse' | 'line' | 'text';
 
@@ -225,10 +226,8 @@ function handleLineMouseDown(pos: Vec2): void {
 // ─── Text tool ──────────────────────────────────────────────
 
 function handleTextMouseDown(pos: Vec2): void {
-  const content = prompt('Enter text:', 'Text');
-  if (!content) return;
-
-  addTextNode(content, pos);
+  // Create text node with default content at click position
+  addTextNode('Text', pos);
 }
 
 // ─── Shape drag (shared by rectangle, ellipse, line) ────────
@@ -290,10 +289,14 @@ function handleShapeDragMouseMove(pos: Vec2): void {
 function getCanvasPosition(e: React.MouseEvent<SVGSVGElement>): Vec2 {
   const svg = e.currentTarget;
   const rect = svg.getBoundingClientRect();
-  return {
-    x: e.clientX - rect.left,
-    y: e.clientY - rect.top,
-  };
+  const ct = getCanvasTransform();
+
+  // Screen coordinates relative to SVG element
+  const screenX = e.clientX - rect.left - ct.panX;
+  const screenY = e.clientY - rect.top - ct.panY;
+
+  // Convert to canvas coordinates accounting for zoom
+  return screenToCanvas(screenX, screenY);
 }
 
 function findShapeNode(node: SceneNode, id: string): ShapeSceneNode | null {

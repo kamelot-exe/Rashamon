@@ -40,6 +40,30 @@
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   pointer-events: none;
   z-index: 10;
+  align-items: center;
+}
+
+.canvas-info__zoom {
+  color: #a0a0c0;
+  font-weight: 600;
+}
+
+.canvas-info__toggle {
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 2px;
+  transition: background 0.1s, color 0.1s;
+  user-select: none;
+}
+
+.canvas-info__toggle:hover {
+  background: #3a3a5c;
+  color: #a0a0c0;
+}
+
+.canvas-info__toggle--active {
+  color: #6c7bff;
 }
 
 /* Selection outline */
