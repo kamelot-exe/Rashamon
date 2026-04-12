@@ -292,7 +292,7 @@ export function SelectionOverlay({ nodeId, nodes, onResize, onRotate }: Selectio
         cursor="grab"
         onMouseDown={(e) => {
           e.stopPropagation();
-          handleRotateStart(e, nodeId, centerX, centerY, onRotate);
+          handleRotateStart(e, nodeId, centerX, centerY, onRotate, undefined);
         }}
       />
 
@@ -363,10 +363,11 @@ function handleResizeStart(
 
 function handleRotateStart(
   e: React.MouseEvent<SVGElement>,
-  nodeId: NodeId,
+  nodeIdOrIds: NodeId | NodeId[],
   centerX: number,
   centerY: number,
-  onRotate: (nodeId: NodeId, angle: number, isStart: boolean, isEnd: boolean) => void
+  onRotateSingle?: (nodeId: NodeId, angle: number, isStart: boolean, isEnd: boolean) => void,
+  onRotateMulti?: (nodeIds: NodeId[], angle: number, isStart: boolean, isEnd: boolean) => void
 ): void {
   const svg = e.currentTarget.closest('svg');
   if (!svg) return;
@@ -375,25 +376,38 @@ function handleRotateStart(
   const startAngle = Math.atan2(e.clientY - svgRect.top - centerY, e.clientX - svgRect.left - centerX) * (180 / Math.PI);
   let lastAngle = startAngle;
 
+  const isMulti = Array.isArray(nodeIdOrIds);
+
   // Push history on start
-  onRotate(nodeId, 0, true, false);
+  if (isMulti && onRotateMulti) {
+    onRotateMulti(nodeIdOrIds as NodeId[], 0, true, false);
+  } else if (!isMulti && onRotateSingle) {
+    onRotateSingle(nodeIdOrIds as NodeId, 0, true, false);
+  }
 
   const onMouseMove = (moveEvent: MouseEvent) => {
     const currentAngle = Math.atan2(moveEvent.clientY - svgRect.top - centerY, moveEvent.clientX - svgRect.left - centerX) * (180 / Math.PI);
     let delta = currentAngle - lastAngle;
 
-    // Snap to 15-degree increments when shift is held
     if (moveEvent.shiftKey) {
       delta = Math.round(delta / 15) * 15;
     }
 
     lastAngle = currentAngle;
 
-    onRotate(nodeId, delta, false, false);
+    if (isMulti && onRotateMulti) {
+      onRotateMulti(nodeIdOrIds as NodeId[], delta, false, false);
+    } else if (!isMulti && onRotateSingle) {
+      onRotateSingle(nodeIdOrIds as NodeId, delta, false, false);
+    }
   };
 
   const onMouseUp = () => {
-    onRotate(nodeId, 0, false, true);
+    if (isMulti && onRotateMulti) {
+      onRotateMulti(nodeIdOrIds as NodeId[], 0, false, true);
+    } else if (!isMulti && onRotateSingle) {
+      onRotateSingle(nodeIdOrIds as NodeId, 0, false, true);
+    }
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('mouseup', onMouseUp);
   };
@@ -412,4 +426,176 @@ function findNodeById(group: GroupSceneNode | null, id: string): SceneNode | nul
     }
   }
   return null;
+}
+
+// ─── Multi-selection overlay ──────────────────────────────────────
+
+interface MultiSelectionOverlayProps {
+  nodes: SceneNode[];
+  onResize: (nodeIds: NodeId[], handle: string, dx: number, dy: number, shiftKey: boolean, isStart: boolean, isEnd: boolean) => void;
+  onRotate: (nodeIds: NodeId[], angle: number, isStart: boolean, isEnd: boolean) => void;
+}
+
+export function MultiSelectionOverlay({ nodes, onResize, onRotate }: MultiSelectionOverlayProps): React.ReactElement | null {
+  if (nodes.length < 2) return null;
+
+  // Compute union bounds
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+  for (const node of nodes) {
+    const bounds = getNodeBoundsForMulti(node);
+    minX = Math.min(minX, bounds.x);
+    minY = Math.min(minY, bounds.y);
+    maxX = Math.max(maxX, bounds.x + bounds.w);
+    maxY = Math.max(maxY, bounds.y + bounds.h);
+  }
+
+  const w = maxX - minX;
+  const h = maxY - minY;
+  const centerX = minX + w / 2;
+  const centerY = minY + h / 2;
+  const hs = HANDLE_SIZE / 2;
+  const nodeIds = nodes.map((n) => n.id);
+
+  const handles = [
+    { id: 'tl', cx: minX - hs, cy: minY - hs, cursor: 'nwse-resize' },
+    { id: 'tr', cx: maxX - hs, cy: minY - hs, cursor: 'nesw-resize' },
+    { id: 'bl', cx: minX - hs, cy: maxY - hs, cursor: 'nesw-resize' },
+    { id: 'br', cx: maxX - hs, cy: maxY - hs, cursor: 'nwse-resize' },
+    { id: 'tm', cx: minX + w / 2 - hs, cy: minY - hs, cursor: 'ns-resize' },
+    { id: 'bm', cx: minX + w / 2 - hs, cy: maxY - hs, cursor: 'ns-resize' },
+    { id: 'ml', cx: minX - hs, cy: minY + h / 2 - hs, cursor: 'ew-resize' },
+    { id: 'mr', cx: maxX - hs, cy: minY + h / 2 - hs, cursor: 'ew-resize' },
+  ];
+
+  const rotateY = minY - ROTATE_HANDLE_OFFSET;
+  const rotateX = minX + w / 2;
+
+  return (
+    <g className="selection-overlay" pointerEvents="auto">
+      {/* Union bounding box */}
+      <rect
+        x={minX - 2}
+        y={minY - 2}
+        width={w + 4}
+        height={h + 4}
+        fill="none"
+        stroke="#6c7bff"
+        strokeWidth={2}
+        strokeDasharray="4 2"
+        pointerEvents="none"
+      />
+
+      {/* Rotate handle */}
+      <line
+        x1={minX + w / 2}
+        y1={minY - 2}
+        x2={rotateX}
+        y2={rotateY + hs}
+        stroke="#6c7bff"
+        strokeWidth={2}
+        pointerEvents="none"
+      />
+      <circle
+        cx={rotateX}
+        cy={rotateY}
+        r={6}
+        fill="#fff"
+        stroke="#6c7bff"
+        strokeWidth={2}
+        className="rotate-handle"
+        cursor="grab"
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          handleRotateStart(e, nodeIds, centerX, centerY, undefined, onRotate);
+        }}
+      />
+
+      {/* Resize handles */}
+      {handles.map((handle) => (
+        <rect
+          key={handle.id}
+          x={handle.cx}
+          y={handle.cy}
+          width={HANDLE_SIZE}
+          height={HANDLE_SIZE}
+          fill="#fff"
+          stroke="#6c7bff"
+          strokeWidth={2}
+          rx={2}
+          className="resize-handle"
+          cursor={handle.cursor}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            handleResizeStartMulti(e, nodeIds, handle.id, onResize);
+          }}
+        />
+      ))}
+    </g>
+  );
+}
+
+function getNodeBoundsForMulti(node: SceneNode): { x: number; y: number; w: number; h: number } {
+  const { x, y } = node.transform;
+  let w = 0, h = 0;
+
+  if (node.type === 'shape') {
+    const shape = node as ShapeSceneNode;
+    switch (shape.geometry.type) {
+      case 'rect':
+        w = (shape.geometry as RectGeometry).width;
+        h = (shape.geometry as RectGeometry).height;
+        break;
+      case 'ellipse':
+        w = (shape.geometry as EllipseGeometry).rx * 2;
+        h = (shape.geometry as EllipseGeometry).ry * 2;
+        break;
+      case 'line':
+        const lg = shape.geometry as LineGeometry;
+        w = Math.abs(lg.x2 - lg.x1);
+        h = Math.abs(lg.y2 - lg.y1);
+        break;
+    }
+  } else if (node.type === 'text') {
+    const textNode = node as TextSceneNode;
+    w = textNode.content.length * textNode.fontSize * 0.6;
+    h = textNode.fontSize;
+  }
+
+  return { x, y, w, h };
+}
+
+function handleResizeStartMulti(
+  e: React.MouseEvent<SVGElement>,
+  nodeIds: NodeId[],
+  handle: string,
+  onResize: (nodeIds: NodeId[], handle: string, dx: number, dy: number, shiftKey: boolean, isStart: boolean, isEnd: boolean) => void
+): void {
+  const svg = e.currentTarget.closest('svg');
+  if (!svg) return;
+
+  const startPos = { x: e.clientX, y: e.clientY };
+  let lastDx = 0, lastDy = 0;
+
+  onResize(nodeIds, handle, 0, 0, false, true, false);
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    const dx = moveEvent.clientX - startPos.x;
+    const dy = moveEvent.clientY - startPos.y;
+    const deltaDx = dx - lastDx;
+    const deltaDy = dy - lastDy;
+    lastDx = dx;
+    lastDy = dy;
+
+    onResize(nodeIds, handle, deltaDx, deltaDy, moveEvent.shiftKey, false, false);
+  };
+
+  const onMouseUp = () => {
+    onResize(nodeIds, handle, 0, 0, false, false, true);
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+  };
+
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp, { once: true });
 }

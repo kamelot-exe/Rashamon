@@ -48,7 +48,7 @@ function snapshot(doc: RashamonDocument): RashamonDocument {
 
 export interface DocumentStore {
   history: HistoryState;
-  selectedId: NodeId | null;
+  selectedIds: Set<NodeId>;
   listeners: Set<() => void>;
 }
 
@@ -60,7 +60,7 @@ function createInitialStore(): DocumentStore {
       present: doc,
       future: [],
     },
-    selectedId: null,
+    selectedIds: new Set(),
     listeners: new Set(),
   };
 }
@@ -89,12 +89,26 @@ export function getDocument(): RashamonDocument {
 }
 
 export function getSelectedId(): NodeId | null {
-  return store.selectedId;
+  // Backward compat: return first selected id
+  return store.selectedIds.values().next().value ?? null;
+}
+
+export function getSelectedIds(): Set<NodeId> {
+  return new Set(store.selectedIds);
+}
+
+export function getSelectedNodes(): SceneNode[] {
+  const doc = store.history.present;
+  const nodes: SceneNode[] = [];
+  for (const id of store.selectedIds) {
+    const node = findNode(doc.root, id);
+    if (node) nodes.push(node);
+  }
+  return nodes;
 }
 
 export function getSelectedNode(): SceneNode | null {
-  if (!store.selectedId) return null;
-  return findNode(store.history.present.root, store.selectedId);
+  return getSelectedId() ? findNode(store.history.present.root, getSelectedId()!) : null;
 }
 
 // ─── Actions (push to undo stack) ────────────────────────────
@@ -121,7 +135,7 @@ export function undo(): boolean {
     present: snapshot(prev),
     future: [snapshot(present), ...future],
   };
-  store.selectedId = null;
+  store.selectedIds.clear();
   notify();
   return true;
 }
@@ -152,7 +166,7 @@ export function canRedo(): boolean {
 export function newDocument(title?: string): void {
   pushHistory();
   store.history.present = createDocument(title || 'Untitled');
-  store.selectedId = null;
+  store.selectedIds.clear();
   notify();
 }
 
@@ -162,7 +176,7 @@ export function setDocument(doc: RashamonDocument): void {
     present: doc,
     future: [],
   };
-  store.selectedId = null;
+  store.selectedIds.clear();
   notify();
 }
 
@@ -194,7 +208,7 @@ export function addShapeNode(
   };
 
   doc.root.children.push(node);
-  store.selectedId = id;
+  store.selectedIds.clear(); store.selectedIds.add(id);
   notify();
   return id;
 }
@@ -226,7 +240,7 @@ export function addTextNode(
   };
 
   doc.root.children.push(node);
-  store.selectedId = id;
+  store.selectedIds.clear(); store.selectedIds.add(id);
   notify();
   return id;
 }
@@ -249,9 +263,72 @@ export function updateTextProperties(id: NodeId, props: Partial<Pick<TextSceneNo
   notify();
 }
 
+// ─── Selection (multi-selection support) ────────────────────
+
+/**
+ * Replace current selection with a single node.
+ */
 export function selectNode(id: NodeId | null): void {
-  store.selectedId = id;
+  store.selectedIds.clear();
+  if (id) store.selectedIds.add(id);
   notify();
+}
+
+/**
+ * Set selection from an array of IDs.
+ */
+export function selectNodes(ids: NodeId[]): void {
+  store.selectedIds.clear();
+  for (const id of ids) {
+    // Only select nodes that still exist in the document
+    if (findNode(store.history.present.root, id)) {
+      store.selectedIds.add(id);
+    }
+  }
+  notify();
+}
+
+/**
+ * Toggle a node in/out of selection.
+ */
+export function toggleSelection(id: NodeId): void {
+  if (store.selectedIds.has(id)) {
+    store.selectedIds.delete(id);
+  } else {
+    store.selectedIds.add(id);
+  }
+  notify();
+}
+
+/**
+ * Add a node to selection (for Ctrl+click add model).
+ */
+export function addToSelection(id: NodeId): void {
+  store.selectedIds.add(id);
+  notify();
+}
+
+/**
+ * Remove a node from selection.
+ */
+export function removeFromSelection(id: NodeId): void {
+  store.selectedIds.delete(id);
+  notify();
+}
+
+/**
+ * Clear all selection.
+ */
+export function clearSelection(): void {
+  store.selectedIds.clear();
+  notify();
+}
+
+/**
+ * Check if a node is selected.
+ */
+export function isSelected(id: NodeId): boolean {
+  return store.selectedIds.has(id);
 }
 
 export function updateTransform(id: NodeId, transform: Partial<Transform>): void {
@@ -327,12 +404,153 @@ export function updateStroke(id: NodeId, stroke: Stroke | null): void {
 }
 
 export function deleteNode(id: NodeId): void {
+  deleteNodes([id]);
+}
+
+/**
+ * Delete multiple nodes at once with a single history entry.
+ */
+export function deleteNodes(ids: NodeId[]): void {
+  if (ids.length === 0) return;
   pushHistory();
   const doc = store.history.present;
-  removeNode(doc.root, id);
-  if (store.selectedId === id) {
-    store.selectedId = null;
+  for (const id of ids) {
+    removeNode(doc.root, id);
+    store.selectedIds.delete(id);
   }
+  notify();
+}
+
+/**
+ * Delete all currently selected nodes.
+ */
+export function deleteSelected(): void {
+  const ids = Array.from(store.selectedIds);
+  deleteNodes(ids);
+}
+
+// ─── Group / Ungroup ────────────────────────────────────────
+
+/**
+ * Group selected nodes into a new parent group.
+ * Nodes must share the same parent for clean grouping.
+ * Creates a single history entry.
+ */
+export function groupSelected(): NodeId | null {
+  if (store.selectedIds.size < 2) return null;
+
+  pushHistory();
+  const doc = store.history.present;
+  const selectedIds = Array.from(store.selectedIds);
+
+  // Find nodes and group by common parent
+  const nodesToGroup: { node: SceneNode; parent: GroupSceneNode; index: number }[] = [];
+  for (const id of selectedIds) {
+    const result = findNodeWithParent(doc.root, id);
+    if (result) {
+      nodesToGroup.push(result);
+    }
+  }
+
+  if (nodesToGroup.length < 2) {
+    // Rollback history push
+    store.history.past.pop();
+    return null;
+  }
+
+  // Group nodes that share the same parent
+  const byParent = new Map<GroupSceneNode, { node: SceneNode; index: number }[]>();
+  for (const item of nodesToGroup) {
+    const arr = byParent.get(item.parent) || [];
+    arr.push(item);
+    byParent.set(item.parent, arr);
+  }
+
+  // Create one group for the largest parent set
+  let bestParent: GroupSceneNode | null = null;
+  let bestItems: { node: SceneNode; index: number }[] = [];
+  for (const [parent, items] of byParent) {
+    if (items.length > bestItems.length) {
+      bestParent = parent;
+      bestItems = items;
+    }
+  }
+
+  if (!bestParent || bestItems.length < 2) {
+    store.history.past.pop();
+    return null;
+  }
+
+  // Sort by index descending to remove from end first
+  bestItems.sort((a, b) => b.index - a.index);
+
+  const groupId = generateId();
+  const groupNode: GroupSceneNode = {
+    id: groupId,
+    name: 'Group',
+    type: 'group',
+    transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0, skewY: 0 },
+    visible: true,
+    locked: false,
+    opacity: 1,
+    semanticTags: [],
+    children: bestItems.map((item) => item.node).reverse(),
+  };
+
+  // Remove children from parent
+  for (const item of bestItems) {
+    bestParent.children.splice(item.index, 1);
+  }
+
+  // Insert group at the position of the first removed child
+  const insertIdx = bestItems[bestItems.length - 1].index;
+  bestParent.children.splice(insertIdx, 0, groupNode);
+
+  // Select the group
+  store.selectedIds.clear();
+  store.selectedIds.add(groupId);
+
+  notify();
+  return groupId;
+}
+
+/**
+ * Ungroup selected groups.
+ */
+export function ungroupSelected(): void {
+  const selectedGroups = Array.from(store.selectedIds).filter((id) => {
+    const node = findNode(store.history.present.root, id);
+    return node && node.type === 'group';
+  });
+
+  if (selectedGroups.length === 0) return;
+
+  pushHistory();
+  const doc = store.history.present;
+  const newSelection: NodeId[] = [];
+
+  for (const groupId of selectedGroups) {
+    const result = findNodeWithParent(doc.root, groupId);
+    if (!result) continue;
+
+    const group = result.node as GroupSceneNode;
+    const parent = result.parent;
+    const groupIdx = parent.children.findIndex((c) => c.id === groupId);
+
+    // Insert children at group position
+    parent.children.splice(groupIdx, 1, ...group.children);
+
+    // Add children to selection
+    for (const child of group.children) {
+      newSelection.push(child.id);
+    }
+  }
+
+  store.selectedIds.clear();
+  for (const id of newSelection) {
+    store.selectedIds.add(id);
+  }
+
   notify();
 }
 
@@ -382,6 +600,29 @@ export function findNode(node: SceneNode, id: NodeId): SceneNode | null {
   return null;
 }
 
+/**
+ * Find a node and return it along with its parent group and index.
+ * Used for group/ungroup operations.
+ */
+export function findNodeWithParent(
+  node: SceneNode,
+  id: NodeId,
+  parent: GroupSceneNode | null = null
+): { node: SceneNode; parent: GroupSceneNode; index: number } | null {
+  if (node.id === id && parent) {
+    const idx = parent.children.findIndex((c) => c.id === id);
+    return { node, parent, index: idx };
+  }
+  if (node.type === 'group') {
+    const group = node as GroupSceneNode;
+    for (const child of group.children) {
+      const found = findNodeWithParent(child, id, group);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 function removeNode(parent: SceneNode, id: NodeId): boolean {
   if (parent.type === 'group') {
     const group = parent as GroupSceneNode;
@@ -408,5 +649,147 @@ function generateId(): string {
 export function resetStore(): void {
   store = createInitialStore();
   _idCounter = 0;
+  notify();
+}
+
+// ─── Align / Distribute ─────────────────────────────────────
+
+export type AlignOp = 'left' | 'right' | 'centerH' | 'top' | 'bottom' | 'middleV';
+export type DistributeOp = 'horizontal' | 'vertical';
+
+interface NodeBounds {
+  id: NodeId;
+  node: SceneNode;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function getNodeBounds(node: SceneNode): { x: number; y: number; w: number; h: number } {
+  const { x, y } = node.transform;
+  let w = 0, h = 0;
+
+  if (node.type === 'shape') {
+    const shape = node as ShapeSceneNode;
+    switch (shape.geometry.type) {
+      case 'rect':
+        w = shape.geometry.width;
+        h = shape.geometry.height;
+        break;
+      case 'ellipse':
+        w = shape.geometry.rx * 2;
+        h = shape.geometry.ry * 2;
+        break;
+      case 'line':
+        w = Math.abs(shape.geometry.x2 - shape.geometry.x1);
+        h = Math.abs(shape.geometry.y2 - shape.geometry.y1);
+        break;
+      default:
+        break;
+    }
+  } else if (node.type === 'text') {
+    const textNode = node as TextSceneNode;
+    w = textNode.content.length * textNode.fontSize * 0.6;
+    h = textNode.fontSize;
+  }
+
+  return { x, y, w, h };
+}
+
+/**
+ * Align selected nodes. Uses a single history entry.
+ */
+export function alignSelected(op: AlignOp): void {
+  const selected = getSelectedNodes();
+  if (selected.length < 2) return;
+
+  const bounds: NodeBounds[] = selected.map((node) => ({
+    id: node.id,
+    node,
+    ...getNodeBounds(node),
+  }));
+
+  pushHistory();
+
+  switch (op) {
+    case 'left': {
+      const minX = Math.min(...bounds.map((b) => b.x));
+      for (const b of bounds) {
+        b.node.transform.x = minX;
+      }
+      break;
+    }
+    case 'right': {
+      const maxX = Math.max(...bounds.map((b) => b.x + b.w));
+      for (const b of bounds) {
+        b.node.transform.x = maxX - b.w;
+      }
+      break;
+    }
+    case 'centerH': {
+      const minX = Math.min(...bounds.map((b) => b.x));
+      const maxX = Math.max(...bounds.map((b) => b.x + b.w));
+      const center = (minX + maxX) / 2;
+      for (const b of bounds) {
+        b.node.transform.x = center - b.w / 2;
+      }
+      break;
+    }
+    case 'top': {
+      const minY = Math.min(...bounds.map((b) => b.y));
+      for (const b of bounds) {
+        b.node.transform.y = minY;
+      }
+      break;
+    }
+    case 'bottom': {
+      const maxY = Math.max(...bounds.map((b) => b.y + b.h));
+      for (const b of bounds) {
+        b.node.transform.y = maxY - b.h;
+      }
+      break;
+    }
+    case 'middleV': {
+      const minY = Math.min(...bounds.map((b) => b.y));
+      const maxY = Math.max(...bounds.map((b) => b.y + b.h));
+      const center = (minY + maxY) / 2;
+      for (const b of bounds) {
+        b.node.transform.y = center - b.h / 2;
+      }
+      break;
+    }
+  }
+
+  notify();
+}
+
+/**
+ * Distribute selected nodes evenly.
+ */
+export function distributeSelected(op: DistributeOp): void {
+  const selected = getSelectedNodes();
+  if (selected.length < 3) return;
+
+  const bounds: NodeBounds[] = selected
+    .map((node) => ({ id: node.id, node, ...getNodeBounds(node) }))
+    .sort((a, b) => (op === 'horizontal' ? a.x - b.x : a.y - b.y));
+
+  pushHistory();
+
+  const first = bounds[0];
+  const last = bounds[bounds.length - 1];
+  const totalSpace = op === 'horizontal' ? last.x - first.x : last.y - first.y;
+  const step = totalSpace / (bounds.length - 1);
+
+  for (let i = 1; i < bounds.length - 1; i++) {
+    const targetPos = (op === 'horizontal' ? first.x : first.y) + step * i;
+    if (op === 'horizontal') {
+      bounds[i].node.transform.x = targetPos;
+    } else {
+      bounds[i].node.transform.y = targetPos;
+    }
+  }
+
   notify();
 }

@@ -14,19 +14,25 @@ import {
   getDocument,
   subscribe,
   getSelectedId,
+  getSelectedIds,
+  getSelectedNodes,
   getFlatNodeList,
   updateTransform,
   resizeNode,
   rotateNode,
   findNode as findNodeById,
+  deleteSelected,
+  groupSelected,
+  ungroupSelected,
 } from '../store/documentStore.js';
 import {
   handleMouseDown,
   handleMouseMove,
   handleMouseUp,
   getActiveTool,
+  getMarqueeRect,
 } from '../tools/toolSystem.js';
-import { renderSceneNodes, SelectionOverlay } from './SvgCanvas.js';
+import { renderSceneNodes, SelectionOverlay, MultiSelectionOverlay } from './SvgCanvas.js';
 import { InlineTextEditor } from './InlineTextEditor.js';
 import {
   getCanvasTransform,
@@ -154,6 +160,65 @@ export const CanvasView: FC = () => {
     }
   }, []);
 
+  // Multi-selection resize handler
+  const handleMultiResize = useCallback(
+    (_nodeIds: string[], handle: string, dx: number, dy: number, _shiftKey: boolean, isStart: boolean, isEnd: boolean) => {
+      const pushHistory = isStart;
+      const selectedNodes = getSelectedNodes();
+
+      const stepX = (_shiftKey || snapToGrid) ? Math.round(dx / gridSize) * gridSize : dx;
+      const stepY = (_shiftKey || snapToGrid) ? Math.round(dy / gridSize) * gridSize : dy;
+
+      for (const node of selectedNodes) {
+        if (node.type !== 'shape') continue;
+        const geo = node.geometry;
+
+        if (geo.type === 'rect') {
+          const isLeft = handle.includes('l');
+          const isTop = handle.includes('t');
+          const isRight = handle.includes('r') && !handle.includes('m');
+          const isBottom = handle.includes('b') && !handle.includes('l');
+
+          let newX = node.transform.x;
+          let newY = node.transform.y;
+          let newW = geo.width;
+          let newH = geo.height;
+
+          if (isLeft) { newX += stepX; newW -= stepX; }
+          if (isRight) { newW += stepX; }
+          if (isTop) { newY += stepY; newH -= stepY; }
+          if (isBottom) { newH += stepY; }
+
+          if (newW < 1) { newW = 1; if (isLeft) newX = node.transform.x + geo.width - 1; }
+          if (newH < 1) { newH = 1; if (isTop) newY = node.transform.y + geo.height - 1; }
+
+          resizeNode(node.id, { type: 'rect', width: newW, height: newH }, pushHistory);
+          updateTransform(node.id, { x: newX, y: newY });
+        } else if (geo.type === 'ellipse') {
+          const newRx = Math.max(1, geo.rx + stepX / 2);
+          const newRy = Math.max(1, geo.ry + stepY / 2);
+          resizeNode(node.id, { type: 'ellipse', rx: newRx, ry: newRy }, pushHistory);
+        } else if (geo.type === 'line') {
+          const lineGeo = geo as import('@rashamon/types').LineGeometry;
+          resizeNode(node.id, { type: 'line', x1: lineGeo.x1, y1: lineGeo.y1, x2: lineGeo.x2 + stepX, y2: lineGeo.y2 + stepY }, pushHistory);
+        }
+      }
+
+      if (isEnd) isResizing.current = false;
+      else isResizing.current = true;
+    },
+    [snapToGrid]
+  );
+
+  // Multi-selection rotate handler
+  const handleMultiRotate = useCallback((nodeIds: string[], angle: number, isStart: boolean, isEnd: boolean) => {
+    for (const id of nodeIds) {
+      rotateNode(id, angle, isStart);
+    }
+    if (isEnd) isRotating.current = false;
+    else isRotating.current = true;
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -210,8 +275,18 @@ export const CanvasView: FC = () => {
           break;
         case 'delete':
         case 'backspace':
-          if (selectedId) {
-            import('../store/documentStore.js').then((m) => m.deleteNode(selectedId));
+          if (getSelectedIds().size > 0) {
+            deleteSelected();
+          }
+          break;
+        case 'g':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            if (e.shiftKey) {
+              ungroupSelected();
+            } else {
+              groupSelected();
+            }
           }
           break;
         case 'z':
@@ -300,6 +375,9 @@ export const CanvasView: FC = () => {
   // Compute viewBox based on zoom and pan
   const viewBox = computeViewBox(doc.canvas.width, doc.canvas.height, ct);
 
+  // Get selected nodes for multi-selection overlay
+  const selectedNodeList = getSelectedNodes();
+
   return (
     <div className="canvas-view">
       <div className="canvas-scroll">
@@ -357,15 +435,25 @@ export const CanvasView: FC = () => {
           {/* Scene nodes */}
           {nodes.map((node) => renderSceneNodes(node))}
 
-          {/* Selection overlay */}
-          {selectedId && (
+          {/* Selection overlay(s) */}
+          {selectedNodeList.length === 1 && (
             <SelectionOverlay
-              nodeId={selectedId}
+              nodeId={selectedNodeList[0].id}
               nodes={nodes}
               onResize={handleResize}
               onRotate={handleRotate}
             />
           )}
+          {selectedNodeList.length > 1 && (
+            <MultiSelectionOverlay
+              nodes={selectedNodeList}
+              onResize={handleMultiResize}
+              onRotate={handleMultiRotate}
+            />
+          )}
+
+          {/* Marquee selection overlay */}
+          <MarqueeOverlay />
         </svg>
       </div>
 
@@ -423,6 +511,32 @@ const GridPattern: FC<{ gridSize: number; snapToGrid: boolean }> = ({ gridSize, 
         strokeWidth={0.5}
       />
     </pattern>
+  );
+};
+
+// ─── Marquee overlay ─────────────────────────────────────────────
+
+const MarqueeOverlay: FC = () => {
+  const rect = getMarqueeRect();
+  if (!rect) return null;
+
+  const x = Math.min(rect.x1, rect.x2);
+  const y = Math.min(rect.y1, rect.y2);
+  const w = Math.abs(rect.x2 - rect.x1);
+  const h = Math.abs(rect.y2 - rect.y1);
+
+  return (
+    <rect
+      x={x}
+      y={y}
+      width={w}
+      height={h}
+      fill="rgba(108, 123, 255, 0.1)"
+      stroke="#6c7bff"
+      strokeWidth={1}
+      strokeDasharray="4 2"
+      pointerEvents="none"
+    />
   );
 };
 

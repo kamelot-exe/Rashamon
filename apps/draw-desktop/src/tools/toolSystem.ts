@@ -20,13 +20,18 @@ import type {
   Vec2,
   ShapeSceneNode,
   SceneNode,
+  GroupSceneNode,
 } from '@rashamon/types';
 import {
   addShapeNode,
   addTextNode,
   selectNode,
+  selectNodes,
+  toggleSelection,
+  isSelected,
   getDocument,
   updateTransform,
+  findNode,
 } from '../store/documentStore.js';
 import { screenToCanvas, getCanvasTransform } from '../store/canvasTransformStore.js';
 
@@ -64,7 +69,9 @@ interface InteractionState {
   startPos: Vec2;
   lastPos: Vec2;
   createdNodeId: string | null;
-  selectedNodeIdAtStart: string | null;
+  selectedNodeIdsAtStart: string[];
+  isMarquee: boolean;
+  marqueeRect: { x1: number; y1: number; x2: number; y2: number } | null;
 }
 
 let interaction: InteractionState = {
@@ -72,7 +79,9 @@ let interaction: InteractionState = {
   startPos: { x: 0, y: 0 },
   lastPos: { x: 0, y: 0 },
   createdNodeId: null,
-  selectedNodeIdAtStart: null,
+  selectedNodeIdsAtStart: [],
+  isMarquee: false,
+  marqueeRect: null,
 };
 
 /**
@@ -115,52 +124,184 @@ export function handleMouseUp(): void {
   if (!interaction.isDragging) return;
   interaction.isDragging = false;
   interaction.createdNodeId = null;
-  interaction.selectedNodeIdAtStart = null;
+  interaction.selectedNodeIdsAtStart = [];
+  interaction.isMarquee = false;
+  interaction.marqueeRect = null;
+}
+
+/**
+ * Get current marquee rectangle for overlay rendering.
+ */
+export function getMarqueeRect(): { x1: number; y1: number; x2: number; y2: number } | null {
+  return interaction.marqueeRect;
 }
 
 // ─── Select tool ────────────────────────────────────────────
 
-function handleSelectMouseDown(_pos: Vec2, e: React.MouseEvent<SVGSVGElement>): void {
+function handleSelectMouseDown(pos: Vec2, e: React.MouseEvent<SVGSVGElement>): void {
   const target = e.target as SVGElement;
   const group = target.closest('[data-node-id]');
 
   if (group) {
+    // Clicked on a node
     const nodeId = group.getAttribute('data-node-id');
-    if (nodeId) {
-      selectNode(nodeId);
+    if (!nodeId) return;
+
+    if (e.ctrlKey || e.metaKey) {
+      // Ctrl+click: toggle selection
+      toggleSelection(nodeId);
       interaction.isDragging = true;
-      interaction.startPos = getCanvasPosition(e);
-      interaction.lastPos = getCanvasPosition(e);
-      interaction.selectedNodeIdAtStart = nodeId;
+      interaction.startPos = pos;
+      interaction.lastPos = pos;
+      interaction.selectedNodeIdsAtStart = Array.from(getSelectionSet());
       return;
     }
+
+    if (isSelected(nodeId)) {
+      // Click on already selected node: start drag
+      interaction.isDragging = true;
+      interaction.startPos = pos;
+      interaction.lastPos = pos;
+      interaction.selectedNodeIdsAtStart = Array.from(getSelectionSet());
+      return;
+    }
+
+    // Click on unselected node: select it
+    selectNode(nodeId);
+    interaction.isDragging = true;
+    interaction.startPos = pos;
+    interaction.lastPos = pos;
+    interaction.selectedNodeIdsAtStart = [nodeId];
+    return;
   }
 
-  selectNode(null);
+  // Clicked on empty canvas
+  if (!e.ctrlKey && !e.metaKey) {
+    // Start marquee selection
+    interaction.isDragging = true;
+    interaction.isMarquee = true;
+    interaction.startPos = pos;
+    interaction.lastPos = pos;
+    interaction.marqueeRect = { x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y };
+  } else {
+    // Ctrl+click on empty: clear selection
+    selectNode(null);
+  }
+}
+
+function getSelectionSet(): Set<string> {
+  const doc = getDocument();
+  const selected = new Set<string>();
+  for (const node of getFlattenedNodes(doc.root)) {
+    if (isSelected(node.id)) {
+      selected.add(node.id);
+    }
+  }
+  return selected;
+}
+
+function getFlattenedNodes(root: SceneNode): SceneNode[] {
+  const result: SceneNode[] = [];
+  const queue = [root];
+  while (queue.length > 0) {
+    const node = queue.shift()!;
+    result.push(node);
+    if (node.type === 'group') {
+      queue.push(...(node as GroupSceneNode).children);
+    }
+  }
+  return result;
 }
 
 function handleSelectMouseMove(pos: Vec2): void {
-  const nodeId = interaction.selectedNodeIdAtStart;
-  if (!nodeId) return;
+  // Marquee selection
+  if (interaction.isMarquee) {
+    interaction.marqueeRect = {
+      x1: interaction.startPos.x,
+      y1: interaction.startPos.y,
+      x2: pos.x,
+      y2: pos.y,
+    };
 
+    // Select nodes within marquee bounds
+    const doc = getDocument();
+    const marquee = normalizeRect(interaction.marqueeRect!);
+    const selectedIds: string[] = [];
+
+    for (const node of getFlattenedNodes(doc.root)) {
+      if (node.type === 'group') continue;
+      if (node.type !== 'shape' && node.type !== 'text') continue;
+
+      const bounds = getNodeBounds(node);
+      if (rectsIntersect(marquee, bounds)) {
+        selectedIds.push(node.id);
+      }
+    }
+
+    selectNodes(selectedIds);
+    return;
+  }
+
+  // Multi-node move
   const dx = pos.x - interaction.lastPos.x;
   const dy = pos.y - interaction.lastPos.y;
 
-  const doc = getDocument();
-  const node = findShapeNode(doc.root, nodeId);
-  if (!node) return;
+  if (dx === 0 && dy === 0) return;
 
-  updateTransform(nodeId, {
-    x: node.transform.x + dx,
-    y: node.transform.y + dy,
-    scaleX: node.transform.scaleX,
-    scaleY: node.transform.scaleY,
-    rotation: node.transform.rotation,
-    skewX: node.transform.skewX,
-    skewY: node.transform.skewY,
-  });
+  const doc = getDocument();
+  for (const nodeId of interaction.selectedNodeIdsAtStart) {
+    const node = findNode(doc.root, nodeId);
+    if (!node) continue;
+
+    updateTransform(nodeId, {
+      x: node.transform.x + dx,
+      y: node.transform.y + dy,
+    });
+  }
 
   interaction.lastPos = pos;
+}
+
+function normalizeRect(r: { x1: number; y1: number; x2: number; y2: number }) {
+  return {
+    x: Math.min(r.x1, r.x2),
+    y: Math.min(r.y1, r.y2),
+    w: Math.abs(r.x2 - r.x1),
+    h: Math.abs(r.y2 - r.y1),
+  };
+}
+
+function rectsIntersect(a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function getNodeBounds(node: SceneNode): { x: number; y: number; w: number; h: number } {
+  const { x, y } = node.transform;
+  let w = 0, h = 0;
+
+  if (node.type === 'shape') {
+    const shape = node as ShapeSceneNode;
+    switch (shape.geometry.type) {
+      case 'rect':
+        w = shape.geometry.width;
+        h = shape.geometry.height;
+        break;
+      case 'ellipse':
+        w = shape.geometry.rx * 2;
+        h = shape.geometry.ry * 2;
+        break;
+      case 'line':
+        w = Math.abs(shape.geometry.x2 - shape.geometry.x1);
+        h = Math.abs(shape.geometry.y2 - shape.geometry.y1);
+        break;
+    }
+  } else if (node.type === 'text') {
+    const textNode = node as import('@rashamon/types').TextSceneNode;
+    w = textNode.content.length * textNode.fontSize * 0.6;
+    h = textNode.fontSize;
+  }
+
+  return { x, y, w, h };
 }
 
 // ─── Rectangle tool ─────────────────────────────────────────
@@ -240,8 +381,8 @@ function handleShapeDragMouseMove(pos: Vec2): void {
   const dy = pos.y - interaction.startPos.y;
 
   const doc = getDocument();
-  const node = findShapeNode(doc.root, nodeId);
-  if (!node) return;
+  const node = findNode(doc.root, nodeId);
+  if (!node || node.type !== 'shape') return;
 
   const geo = node.geometry;
 
@@ -299,13 +440,3 @@ function getCanvasPosition(e: React.MouseEvent<SVGSVGElement>): Vec2 {
   return screenToCanvas(screenX, screenY);
 }
 
-function findShapeNode(node: SceneNode, id: string): ShapeSceneNode | null {
-  if (node.id === id && node.type === 'shape') return node as ShapeSceneNode;
-  if (node.type === 'group') {
-    for (const child of node.children) {
-      const found = findShapeNode(child, id);
-      if (found) return found;
-    }
-  }
-  return null;
-}

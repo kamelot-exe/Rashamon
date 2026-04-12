@@ -9,16 +9,18 @@
 import { FC, useEffect, useState } from 'react';
 import {
   subscribe,
-  getSelectedId,
+  getSelectedIds,
   selectNode,
+  toggleSelection,
   getFlatNodeList,
   deleteNode,
+  deleteSelected,
   FlatNode,
 } from '../store/documentStore.js';
 import './LayersPanel.css';
 
 export const LayersPanel: FC = () => {
-  const selectedId = getSelectedId();
+  const selectedIds = getSelectedIds();
   const flatNodes = getFlatNodeList();
   const [, forceUpdate] = useState(0);
 
@@ -44,11 +46,21 @@ export const LayersPanel: FC = () => {
               <LayerItem
                 key={node.id}
                 node={node}
-                isSelected={node.id === selectedId}
-                onSelect={() => selectNode(node.id === selectedId ? null : node.id)}
+                isSelected={selectedIds.has(node.id)}
+                onSelect={(e) => {
+                  if (e.ctrlKey || e.metaKey) {
+                    toggleSelection(node.id);
+                  } else {
+                    selectNode(node.id);
+                  }
+                }}
                 onDelete={() => {
-                  if (node.id !== selectedId) selectNode(node.id);
-                  deleteNode(node.id);
+                  if (!selectedIds.has(node.id)) selectNode(node.id);
+                  if (selectedIds.size > 1) {
+                    deleteSelected();
+                  } else {
+                    deleteNode(node.id);
+                  }
                 }}
               />
             ))}
@@ -64,7 +76,7 @@ export const LayersPanel: FC = () => {
 const LayerItem: FC<{
   node: FlatNode;
   isSelected: boolean;
-  onSelect: () => void;
+  onSelect: (e: React.MouseEvent) => void;
   onDelete: () => void;
 }> = ({ node, isSelected, onSelect, onDelete }) => {
   return (

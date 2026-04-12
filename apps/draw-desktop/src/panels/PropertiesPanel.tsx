@@ -12,11 +12,12 @@
 
 import { FC, useEffect, useState } from 'react';
 import type { ShapeSceneNode, TextSceneNode, RectGeometry, EllipseGeometry, LineGeometry } from '@rashamon/types';
-import { subscribe, getSelectedId, getSelectedNode, updateTransform, updateNodeName, updateTextContent, updateTextProperties, updateFill, updateStroke } from '../store/documentStore.js';
+import { subscribe, getSelectedId, getSelectedIds, getSelectedNode, updateTransform, updateNodeName, updateTextContent, updateTextProperties, updateFill, updateStroke, alignSelected, distributeSelected } from '../store/documentStore.js';
 import './PropertiesPanel.css';
 
 export const PropertiesPanel: FC = () => {
   const selectedId = getSelectedId();
+  const selectedIds = getSelectedIds();
   const selectedNode = getSelectedNode();
   const [, forceUpdate] = useState(0);
 
@@ -372,6 +373,35 @@ export const PropertiesPanel: FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Align / Distribute — only visible with multi-selection */}
+      {selectedIds.size >= 2 && (
+        <div className="properties-panel__align-section">
+          <div className="properties-panel__header">Align & Distribute</div>
+          <div className="properties-panel__content">
+            <div className="prop-group">
+              <label className="prop-label">Align</label>
+              <div className="align-buttons">
+                <button className="align-btn" onClick={() => alignSelected('left')} title="Align Left">⫷ Left</button>
+                <button className="align-btn" onClick={() => alignSelected('centerH')} title="Align Center H">⫿ Center</button>
+                <button className="align-btn" onClick={() => alignSelected('right')} title="Align Right">⫸ Right</button>
+              </div>
+              <div className="align-buttons">
+                <button className="align-btn" onClick={() => alignSelected('top')} title="Align Top">⊤ Top</button>
+                <button className="align-btn" onClick={() => alignSelected('middleV')} title="Align Middle V">⊥ Middle</button>
+                <button className="align-btn" onClick={() => alignSelected('bottom')} title="Align Bottom">⊥ Bottom</button>
+              </div>
+            </div>
+            <div className="prop-group">
+              <label className="prop-label">Distribute</label>
+              <div className="align-buttons">
+                <button className="align-btn" onClick={() => distributeSelected('horizontal')} title="Distribute Horizontally">↔ Horiz</button>
+                <button className="align-btn" onClick={() => distributeSelected('vertical')} title="Distribute Vertically">↕ Vert</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
