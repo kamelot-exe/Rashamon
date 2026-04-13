@@ -3,7 +3,7 @@
  *
  * - Shows all nodes in document order
  * - Selecting a layer selects the object on canvas
- * - Visual indicators for type, visibility
+ * - Clean icon-first items with proper visual hierarchy
  */
 
 import { FC, useEffect, useState } from 'react';
@@ -33,11 +33,14 @@ export const LayersPanel: FC = () => {
 
   return (
     <div className="layers-panel">
-      <div className="layers-panel__header">Layers</div>
+      <div className="layers-panel__header">
+        <span>Layers</span>
+        <span className="layers-panel__count">{layers.length}</span>
+      </div>
       <div className="layers-panel__content">
         {layers.length === 0 ? (
           <div className="layers-panel__empty">
-            <p>No layers</p>
+            <p>No layers yet</p>
             <span>Use a shape tool to create objects</span>
           </div>
         ) : (
@@ -88,10 +91,12 @@ const LayerItem: FC<{
       onClick={onSelect}
     >
       <span className="layer-item__icon" aria-hidden="true">
-        {getTypeIcon(node.type)}
+        {getTypeIconSvg(node.type)}
       </span>
       <span className="layer-item__name">{node.name}</span>
-      <span className="layer-item__type">{node.type}</span>
+      {node.semanticRole && typeof node.semanticRole === 'string' && (
+        <span className="layer-item__role" title={`Role: ${node.semanticRole}`}>{getRoleIcon(node.semanticRole)}</span>
+      )}
       <button
         className="layer-item__delete"
         title="Delete"
@@ -101,23 +106,57 @@ const LayerItem: FC<{
           onDelete();
         }}
       >
-        ×
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
       </button>
     </li>
   );
 };
 
-function getTypeIcon(type: string): string {
+function getTypeIconSvg(type: string): React.ReactNode {
   switch (type) {
     case 'group':
-      return '📁';
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <path d="M3 7v10h18V7H3z" />
+        </svg>
+      );
     case 'shape':
-      return '◆';
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+        </svg>
+      );
     case 'text':
-      return 'T';
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <path d="M4 7V4h16v3M9 20h6M12 4v16" />
+        </svg>
+      );
     case 'image':
-      return '🖼';
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <path d="M21 15l-5-5L5 21" />
+        </svg>
+      );
     default:
-      return '·';
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="1" />
+        </svg>
+      );
+  }
+}
+
+function getRoleIcon(role: string): string {
+  switch (role) {
+    case 'background': return '🖼';
+    case 'foreground': return '🔝';
+    case 'annotation': return '💬';
+    case 'guide': return '📐';
+    default: return '';
   }
 }

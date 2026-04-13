@@ -1,116 +1,110 @@
-/* ─── History Panel ──────────────────────────────────────────── */
+/* ─── History Panel ────────────────────────────────── */
 
 .history-panel {
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
 .history-panel__header {
-  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
   font-size: var(--font-size-xs);
   font-weight: 600;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
+  border: none;
+  border-top: 1px solid var(--color-border-subtle);
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--color-border);
+  letter-spacing: 0.06em;
+  font-family: inherit;
+  transition: color var(--transition-fast);
+}
+
+.history-panel__header:hover {
+  color: var(--color-text-primary);
+}
+
+.history-panel__chevron {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--transition-fast);
+  transform: rotate(-90deg);
+}
+
+.history-panel__chevron--open {
+  transform: rotate(0deg);
 }
 
 .history-panel__content {
-  padding: 8px;
+  padding: var(--space-3) var(--space-4);
 }
 
-/* Navigation buttons */
+/* ─── Navigation ───────────────────────────────────── */
+
 .history-nav {
   display: flex;
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: var(--space-2);
 }
 
 .history-nav__btn {
   flex: 1;
-  background: var(--color-bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
-  border-radius: 3px;
-  color: var(--color-text-primary);
-  padding: 4px 8px;
-  font-size: 11px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  padding: var(--space-2);
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s;
-  font-family: inherit;
+  transition: all var(--transition-fast);
+  height: 30px;
 }
 
 .history-nav__btn:hover:not(:disabled) {
-  background: #3e3e60;
-  border-color: var(--color-accent);
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-accent-border);
 }
 
 .history-nav__btn:disabled {
-  opacity: 0.4;
+  color: var(--color-text-disabled);
   cursor: not-allowed;
+  border-color: var(--color-border-subtle);
 }
 
-/* Stats */
-.history-stats {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 6px;
+.history-nav__btn svg {
+  width: 16px;
+  height: 16px;
 }
 
-.history-stat {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 4px;
-  background: rgba(30, 30, 46, 0.5);
-  border-radius: 3px;
-}
+/* ─── Branch Indicator ─────────────────────────────── */
 
-.history-stat__label {
-  font-size: 9px;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.history-stat__value {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  font-family: var(--font-mono);
-}
-
-/* Branch indicator */
 .history-branch {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  border-radius: 3px;
-  background: rgba(30, 30, 46, 0.5);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: var(--space-3);
 }
 
 .history-branch--forked {
-  background: rgba(108, 123, 255, 0.1);
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent-border);
 }
 
-.history-branch__icon {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: #6a6a8a;
-}
-
-.history-branch--forked .history-branch__icon {
-  color: #6c7bff;
-}
-
-.history-branch__text {
-  font-size: 11px;
-  color: #6a6a8a;
-  font-family: var(--font-mono);
-}
-
-.history-branch--forked .history-branch__text {
-  color: #a0a0ff;
+.history-branch svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }

@@ -1,186 +1,163 @@
 /**
- * Main application shell for Rashamon Draw.
+ * Main application shell for Rashamon Canvas.
  *
- * Layout:
- * ┌──────────────────────────────────────────────┐
- * │                TopBar                        │
- * ├──────────┬───────────────────────┬───────────┤
- * │ Sidebar  │      Canvas           │ Inspector │
- * │ (tools + │   (SVG renderer       │ (props)   │
- * │ layers)  │    + tool interaction)│           │
- * ├──────────┴───────────────────────┴───────────┤
- * │               StatusBar                      │
- * └──────────────────────────────────────────────┘
+ * Professional editor layout:
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │  TopBar (brand · file · edit · export · zoom · doc title)   │
+ * ├────┬──────────────────────────┬──────────────────────────────┤
+ * │ 🔧 │                          │  Properties / Inspector      │
+ * │    │      Canvas              │                              │
+ * │    │                          │                              │
+ * │    │                          │                              │
+ * └────┴──────────────────────────┴──────────────────────────────┘
+ * │  StatusBar (selection · tool · scope · zoom · canvas size)   │
+ * └─────────────────────────────────────────────────────────────┘
  */
 
 import { useEffect, useState, FC } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { ToolButtons } from './tools/ToolButtons.js';
 import { LayersPanel } from './panels/LayersPanel.js';
 import { HistoryPanel } from './panels/HistoryPanel.js';
 import { PropertiesPanel } from './panels/PropertiesPanel.js';
 import { CanvasView } from './canvas/CanvasView.js';
-import { getDocument, subscribe, canUndo, canRedo, undo, redo, getHistoryStatsExport, getEditScopeGroup } from './store/documentStore.js';
+import {
+  getDocument, subscribe, canUndo, canRedo, undo, redo,
+  getEditScopeGroup, getSelectedIds,
+} from './store/documentStore.js';
 import { handleNewDocument, handleSaveDocument, handleOpenDocument, handleExportSvg, handleExportPng } from './utils/fileOps.js';
-import { resetTransform } from './store/canvasTransformStore.js';
+import { resetTransform, getCanvasTransform, subscribe as subscribeTransform } from './store/canvasTransformStore.js';
+import { getActiveTool, subscribeTool } from './tools/toolSystem.js';
 import './styles/global.css';
 
-// ─── TopBar ─────────────────────────────────────────────────
+// ─── TopBar ─────────────────────────────────────────────
 
 const TopBar: FC = () => {
   const doc = getDocument();
   const [, forceUpdate] = useState(0);
+  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
-    return subscribe(() => forceUpdate((n) => n + 1));
+    const unsubDoc = subscribe(() => forceUpdate((n) => n + 1));
+    const unsubTransform = subscribeTransform(() => {
+      setZoom(getCanvasTransform().zoom);
+      forceUpdate((n) => n + 1);
+    });
+    return () => { unsubDoc(); unsubTransform(); };
   }, []);
+
+  const zoomPercent = Math.round(zoom * 100);
 
   return (
     <header className="topbar" role="toolbar" aria-label="Main toolbar">
+      {/* Brand */}
       <div className="topbar__brand">
         <span className="topbar__logo" aria-hidden="true">◆</span>
-        <span className="topbar__title">Rashamon Draw</span>
-        <span className="topbar__version">v0.0.0-alpha</span>
+        <span className="topbar__title">Rashamon Canvas</span>
       </div>
-      <div className="topbar__file">
-        <button className="topbar__btn" onClick={handleNewDocument} title="New (Ctrl+N)">
-          New
-        </button>
-        <button className="topbar__btn" onClick={handleOpenDocument} title="Open (Ctrl+O)">
-          Open
-        </button>
-        <button className="topbar__btn" onClick={handleSaveDocument} title="Save (Ctrl+S)">
-          Save
-        </button>
+
+      {/* File actions */}
+      <div className="topbar__group">
+        <button className="topbar__btn" onClick={handleNewDocument} title="New (Ctrl+N)">New</button>
+        <button className="topbar__btn" onClick={handleOpenDocument} title="Open (Ctrl+O)">Open</button>
+        <button className="topbar__btn" onClick={handleSaveDocument} title="Save (Ctrl+S)">Save</button>
       </div>
-      <div className="topbar__edit">
-        <button
-          className="topbar__btn"
-          onClick={() => undo()}
-          disabled={!canUndo()}
-          title="Undo (Ctrl+Z)"
-        >
-          Undo
-        </button>
-        <button
-          className="topbar__btn"
-          onClick={() => redo()}
-          disabled={!canRedo()}
-          title="Redo (Ctrl+Shift+Z)"
-        >
-          Redo
-        </button>
-        <button
-          className="topbar__btn"
-          onClick={() => resetTransform()}
-          title="Reset zoom (Ctrl+0)"
-        >
-          Reset View
-        </button>
+
+      <div className="topbar__separator" />
+
+      {/* Edit */}
+      <div className="topbar__group">
+        <button className="topbar__btn" onClick={() => undo()} disabled={!canUndo()} title="Undo (Ctrl+Z)">Undo</button>
+        <button className="topbar__btn" onClick={() => redo()} disabled={!canRedo()} title="Redo (Ctrl+Y)">Redo</button>
       </div>
-      <div className="topbar__export">
-        <button
-          className="topbar__btn"
-          onClick={handleExportSvg}
-          title="Export as SVG"
-        >
-          Export SVG
-        </button>
-        <button
-          className="topbar__btn"
-          onClick={handleExportPng}
-          title="Export as PNG (TODO)"
-        >
-          Export PNG
-        </button>
+
+      <div className="topbar__separator" />
+
+      {/* Export */}
+      <div className="topbar__group">
+        <button className="topbar__btn" onClick={handleExportSvg} title="Export SVG">SVG</button>
+        <button className="topbar__btn" onClick={handleExportPng} title="Export PNG">PNG</button>
       </div>
+
+      <div className="topbar__separator" />
+
+      {/* View */}
+      <button className="topbar__btn" onClick={() => resetTransform()} title="Reset view (Ctrl+0)">Reset View</button>
+
+      {/* Spacer */}
       <div className="topbar__spacer" />
-      <div className="topbar__doc-title">
-        {doc.metadata.title || 'Untitled'}
+
+      {/* Zoom display */}
+      <div className="topbar__zoom" title="Zoom level">
+        {zoomPercent}%
       </div>
+
+      {/* Document title */}
+      <div className="topbar__doc-title">{doc.metadata.title || 'Untitled'}</div>
     </header>
   );
 };
 
-// ─── StatusBar ──────────────────────────────────────────────
+// ─── StatusBar ──────────────────────────────────────────
 
 const StatusBar: FC = () => {
   const doc = getDocument();
   const [, forceUpdate] = useState(0);
-  const [historyStats, setHistoryStats] = useState({ depth: 1, branchPoints: 0, isOnMainBranch: true, totalNodes: 1 });
+  const [zoom, setZoom] = useState(1);
+  const [activeTool, setActiveToolState] = useState('select');
+  const [selectionCount, setSelectionCount] = useState(0);
   const [scopeGroup, setScopeGroup] = useState<{ name: string } | null>(null);
 
   useEffect(() => {
-    return subscribe(() => {
-      setHistoryStats(getHistoryStatsExport());
+    const unsubDoc = subscribe(() => {
+      setSelectionCount(getSelectedIds().size);
       setScopeGroup(getEditScopeGroup());
       forceUpdate((n) => n + 1);
     });
+    const unsubTransform = subscribeTransform(() => setZoom(getCanvasTransform().zoom));
+    const unsubTool = subscribeTool(() => setActiveToolState(getActiveTool()));
+    return () => { unsubDoc(); unsubTransform(); unsubTool(); };
   }, []);
 
-  const objectCount = doc.root.children.length;
+  const zoomPercent = Math.round(zoom * 100);
 
   return (
     <footer className="statusbar" role="status" aria-label="Status bar">
       <div className="statusbar__left">
-        <span className="statusbar__item">Ready</span>
-        <span className="statusbar__separator">|</span>
-        <span className="statusbar__item">{objectCount} object{objectCount !== 1 ? 's' : ''}</span>
+        <span className="statusbar__item">{selectionCount} selected</span>
+        <span className="statusbar__separator" />
+        <span className="statusbar__item">{activeTool}</span>
         {scopeGroup && (
           <>
-            <span className="statusbar__separator">|</span>
-            <span className="statusbar__item statusbar__item--scope">In group: {scopeGroup.name}</span>
-          </>
-        )}
-        {historyStats.branchPoints > 0 && (
-          <>
-            <span className="statusbar__separator">|</span>
-            <span className="statusbar__item" title={`History depth: ${historyStats.depth}, Total nodes: ${historyStats.totalNodes}`}>
-              📊 {historyStats.depth} steps
-            </span>
+            <span className="statusbar__separator" />
+            <span className="statusbar__item statusbar__item--scope">{scopeGroup.name}</span>
           </>
         )}
       </div>
       <div className="statusbar__right">
+        <span className="statusbar__item statusbar__item--zoom">{zoomPercent}%</span>
+        <span className="statusbar__separator" />
         <span className="statusbar__item">{doc.canvas.width} × {doc.canvas.height}</span>
-        <span className="statusbar__separator">|</span>
-        <span className="statusbar__item">Zoom: 100%</span>
       </div>
     </footer>
   );
 };
 
-// ─── App ────────────────────────────────────────────────────
+// ─── App ────────────────────────────────────────────────
 
 export function App() {
-  const [coreInfo, setCoreInfo] = useState<string>('dev mode');
-
-  useEffect(() => {
-    invoke<string>('get_core_info')
-      .then((info) => {
-        try {
-          const parsed = JSON.parse(info);
-          setCoreInfo(`${parsed.name} v${parsed.version}`);
-        } catch {
-          setCoreInfo(info);
-        }
-      })
-      .catch(() => {
-        // Tauri commands may not be available in all dev scenarios
-        setCoreInfo('dev mode');
-      });
-  }, []);
-
   return (
     <div className="app-shell">
       <TopBar />
       <div className="app-body">
-        {/* Left sidebar: tools + layers */}
+        {/* Left: tool rail + secondary panel (layers + history) */}
         <aside className="app-sidebar">
-          <ToolButtons />
-          <div className="app-sidebar__divider" />
-          <LayersPanel />
-          <HistoryPanel />
+          <div className="app-sidebar__tools">
+            <ToolButtons />
+          </div>
+          <div className="app-sidebar__secondary">
+            <LayersPanel />
+            <HistoryPanel />
+          </div>
         </aside>
 
         {/* Center: canvas */}
@@ -188,16 +165,12 @@ export function App() {
           <CanvasView />
         </main>
 
-        {/* Right: properties inspector */}
+        {/* Right: inspector */}
         <aside className="app-inspector">
           <PropertiesPanel />
         </aside>
       </div>
       <StatusBar />
-      {/* Debug info (dev only) */}
-      <div className="app-debug">
-        <code>Core: {coreInfo}</code>
-      </div>
     </div>
   );
 }

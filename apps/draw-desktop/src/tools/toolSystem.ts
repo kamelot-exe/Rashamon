@@ -33,9 +33,8 @@ import {
   updateTransform,
   findNode,
 } from '../store/documentStore.js';
-import { screenToCanvas, getCanvasTransform } from '../store/canvasTransformStore.js';
 
-export type ToolType = 'select' | 'rectangle' | 'ellipse' | 'line' | 'text';
+export type ToolType = 'select' | 'hand' | 'rectangle' | 'ellipse' | 'line' | 'text';
 
 export interface ToolContext {
   type: ToolType;
@@ -92,6 +91,12 @@ export function handleMouseDown(e: React.MouseEvent<SVGSVGElement>): void {
 
   if (activeTool === 'select') {
     handleSelectMouseDown(pos, e);
+  } else if (activeTool === 'hand') {
+    // Hand tool: pan is handled in CanvasView via space+drag or middle mouse
+    // Hand tool just sets the mode — no creation needed
+    interaction.isDragging = true;
+    interaction.startPos = pos;
+    interaction.lastPos = pos;
   } else if (activeTool === 'rectangle') {
     handleRectangleMouseDown(pos);
   } else if (activeTool === 'ellipse') {
@@ -429,14 +434,16 @@ function handleShapeDragMouseMove(pos: Vec2): void {
 
 function getCanvasPosition(e: React.MouseEvent<SVGSVGElement>): Vec2 {
   const svg = e.currentTarget;
-  const rect = svg.getBoundingClientRect();
-  const ct = getCanvasTransform();
 
-  // Screen coordinates relative to SVG element
-  const screenX = e.clientX - rect.left - ct.panX;
-  const screenY = e.clientY - rect.top - ct.panY;
+  // Use SVG's built-in CTM for accurate screen-to-canvas conversion
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX;
+  pt.y = e.clientY;
 
-  // Convert to canvas coordinates accounting for zoom
-  return screenToCanvas(screenX, screenY);
+  const svgP = pt.matrixTransform(svg.getScreenCTM()!.inverse());
+  return {
+    x: svgP.x,
+    y: svgP.y,
+  };
 }
 

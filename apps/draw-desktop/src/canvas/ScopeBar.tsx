@@ -2,11 +2,10 @@
  * ScopeBar — breadcrumb bar showing current edit scope.
  *
  * Shows:
- * - Current scope path (root → Group Name)
+ * - Current scope path (Root > Group Name)
  * - Exit button when inside a group
- * - Double-click hint for entering groups
  *
- * When at root level, shows a minimal "Root" indicator.
+ * Integrated into canvas area.
  */
 
 import { FC, useEffect, useState } from 'react';
@@ -33,19 +32,14 @@ export const ScopeBar: FC = () => {
   }, []);
 
   if (!scopeGroupId) {
-    return (
-      <div className="scope-bar">
-        <span className="scope-bar__root">📄 Root</span>
-        <span className="scope-bar__hint">Double-click a group to enter</span>
-      </div>
-    );
+    return null;
   }
 
   return (
     <div className="scope-bar scope-bar--active">
       <div className="scope-bar__path">
-        <span className="scope-bar__root">📄 Root</span>
-        <span className="scope-bar__separator">›</span>
+        <span className="scope-bar__root">Root</span>
+        <span className="scope-bar__separator">/</span>
         <span className="scope-bar__current">{scopeName}</span>
       </div>
       <button
@@ -53,7 +47,10 @@ export const ScopeBar: FC = () => {
         onClick={() => exitGroup()}
         title="Exit to parent scope (Esc)"
       >
-        ↑ Exit
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <path d="M12 19V5M5 12l7-7 7 7" />
+        </svg>
+        Exit
       </button>
     </div>
   );

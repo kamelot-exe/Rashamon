@@ -16,7 +16,6 @@ import {
   getSelectedId,
   getSelectedIds,
   getSelectedNodes,
-  getFlatNodeList,
   updateTransform,
   resizeNode,
   rotateNode,
@@ -340,6 +339,9 @@ export const CanvasView: FC = () => {
         case 'v':
           import('../tools/toolSystem.js').then((m) => m.setActiveTool('select'));
           break;
+        case 'h':
+          import('../tools/toolSystem.js').then((m) => m.setActiveTool('hand'));
+          break;
         case 'r':
           import('../tools/toolSystem.js').then((m) => m.setActiveTool('rectangle'));
           break;
@@ -586,18 +588,9 @@ export const CanvasView: FC = () => {
         </svg>
       </div>
 
-      {/* Canvas info overlay */}
+      {/* Canvas info: minimal, bottom-right */}
       <div className="canvas-info">
-        <span>{doc.canvas.width} × {doc.canvas.height}px</span>
-        <span>{getFlatNodeList().length - 1} objects</span>
-        <span>{getActiveTool()}</span>
         <span className="canvas-info__zoom">{Math.round(ct.zoom * 100)}%</span>
-        <span className={`canvas-info__toggle ${snapToGrid ? 'canvas-info__toggle--active' : ''}`} title="Toggle snap (S)">
-          Snap
-        </span>
-        <span className={`canvas-info__toggle ${showGrid ? 'canvas-info__toggle--active' : ''}`} title="Toggle grid (G)">
-          Grid
-        </span>
       </div>
 
       {/* Inline text editor overlay */}
@@ -675,6 +668,8 @@ function getCursorForTool(tool: string): string {
   switch (tool) {
     case 'select':
       return 'default';
+    case 'hand':
+      return 'grab';
     case 'rectangle':
     case 'ellipse':
     case 'line':
