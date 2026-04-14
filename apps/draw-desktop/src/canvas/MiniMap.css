@@ -1,0 +1,24 @@
+/* ─── Mini Map ─────────────────────────────────────── */
+
+.mini-map {
+  position: absolute;
+  bottom: var(--space-6);
+  left: var(--space-6);
+  background: rgba(30, 30, 34, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  z-index: 20;
+  box-shadow: var(--shadow-elevated);
+  overflow: hidden;
+}
+
+.mini-map__svg {
+  display: block;
+  cursor: pointer;
+}
+
+.mini-map__svg rect {
+  transition: fill var(--transition-fast);
+}

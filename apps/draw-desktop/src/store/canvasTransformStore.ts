@@ -92,3 +92,9 @@ export function resetTransform(): void {
   transform = { zoom: 1, panX: 0, panY: 0 };
   notify();
 }
+
+export function panTo(panX: number, panY: number): void {
+  transform.panX = panX;
+  transform.panY = panY;
+  notify();
+}

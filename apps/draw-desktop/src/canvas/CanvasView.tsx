@@ -48,6 +48,7 @@ import {
   subscribe as subscribeTransform,
   resetTransform,
 } from '../store/canvasTransformStore.js';
+import { MiniMap } from './MiniMap.js';
 import './CanvasView.css';
 
 export const CanvasView: FC = () => {
@@ -597,6 +598,9 @@ export const CanvasView: FC = () => {
       <div className="canvas-info">
         <span className="canvas-info__zoom">{Math.round(ct.zoom * 100)}%</span>
       </div>
+
+      {/* Mini-map */}
+      <MiniMap />
 
       {/* Inline text editor overlay */}
       {editingTextId && (

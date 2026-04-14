@@ -323,25 +323,45 @@ export function addFrameNode(
 
 /**
  * Update frame width directly (for inspector input).
+ * Also resolves constraints on all children.
  */
 export function mutateFrameWidth(id: NodeId, width: number): void {
   pushHistory();
   const doc = getCurrentDocument(store.history);
   const node = findNode(doc.root, id);
   if (!node || node.type !== 'frame') return;
-  (node as FrameSceneNode).width = Math.max(1, width);
+  const frame = node as FrameSceneNode;
+  frame.width = Math.max(1, width);
+  // Resolve constraints for all children
+  for (const child of frame.children) {
+    resolveConstraints(child.id, id);
+  }
+  // Re-layout if auto layout is enabled
+  if (frame.autoLayout.mode !== 'none') {
+    layoutChildren(frame);
+  }
   notify();
 }
 
 /**
  * Update frame height directly (for inspector input).
+ * Also resolves constraints on all children.
  */
 export function mutateFrameHeight(id: NodeId, height: number): void {
   pushHistory();
   const doc = getCurrentDocument(store.history);
   const node = findNode(doc.root, id);
   if (!node || node.type !== 'frame') return;
-  (node as FrameSceneNode).height = Math.max(1, height);
+  const frame = node as FrameSceneNode;
+  frame.height = Math.max(1, height);
+  // Resolve constraints for all children
+  for (const child of frame.children) {
+    resolveConstraints(child.id, id);
+  }
+  // Re-layout if auto layout is enabled
+  if (frame.autoLayout.mode !== 'none') {
+    layoutChildren(frame);
+  }
   notify();
 }
 
@@ -1165,37 +1185,133 @@ export function updateAutoLayout(frameId: NodeId, updates: Partial<AutoLayoutCon
 
 /**
  * Layout children of a frame based on auto layout config.
- * This is the core auto layout engine.
+ * This is the core auto layout engine with hug/fill/fixed sizing.
  */
 function layoutChildren(frame: FrameSceneNode): void {
   const config = frame.autoLayout;
   if (config.mode === 'none' || frame.children.length === 0) return;
 
   const isHorizontal = config.mode === 'horizontal';
-
-  // First pass: measure children (use their natural size)
   const children = frame.children;
+
+  // Compute available space on primary axis
+  const availablePrimary = isHorizontal
+    ? frame.width - config.paddingLeft - config.paddingRight
+    : frame.height - config.paddingTop - config.paddingBottom;
+
+  // First pass: compute each child's natural size and identify fill children
+  const childSizes = children.map((child) => ({
+    node: child,
+    naturalSize: isHorizontal ? getNodeWidth(child) : getNodeHeight(child),
+    isFill: getChildFillBehavior(child, isHorizontal) === 'fill',
+  }));
+
+  const fillCount = childSizes.filter((c) => c.isFill).length;
+  const fixedTotal = childSizes
+    .filter((c) => !c.isFill)
+    .reduce((sum, c) => sum + c.naturalSize, 0);
+  const spacingTotal = Math.max(0, children.length - 1) * config.spacing;
+  const remaining = availablePrimary - fixedTotal - spacingTotal;
+  const fillSize = fillCount > 0 ? Math.max(0, remaining / fillCount) : 0;
+
+  // Second pass: position children
   let cursor = isHorizontal ? config.paddingLeft : config.paddingTop;
 
-  for (const child of children) {
-    child.transform.x = isHorizontal ? config.paddingLeft : cursor;
-    child.transform.y = isHorizontal ? cursor : config.paddingTop;
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    const cs = childSizes[i];
+    const size = cs.isFill ? fillSize : cs.naturalSize;
 
+    // Position on primary axis
     if (isHorizontal) {
-      cursor += getNodeWidth(child) + config.spacing;
+      child.transform.x = cursor;
     } else {
-      cursor += getNodeHeight(child) + config.spacing;
+      child.transform.y = cursor;
     }
+
+    // Position on counter axis based on counterAxisAlign
+    const availableCounter = isHorizontal
+      ? frame.height - config.paddingTop - config.paddingBottom
+      : frame.width - config.paddingLeft - config.paddingRight;
+    const childCounterSize = isHorizontal ? getNodeHeight(child) : getNodeWidth(child);
+    const counterGap = Math.max(0, availableCounter - childCounterSize);
+
+    switch (config.counterAxisAlign) {
+      case 'min':
+        if (isHorizontal) child.transform.y = config.paddingTop;
+        else child.transform.x = config.paddingLeft;
+        break;
+      case 'center':
+        if (isHorizontal) child.transform.y = config.paddingTop + counterGap / 2;
+        else child.transform.x = config.paddingLeft + counterGap / 2;
+        break;
+      case 'max':
+        if (isHorizontal) child.transform.y = frame.height - config.paddingBottom - childCounterSize;
+        else child.transform.x = frame.width - config.paddingRight - childCounterSize;
+        break;
+      case 'spaceBetween':
+        // Only meaningful with multiple children and fill behavior
+        if (isHorizontal) child.transform.y = config.paddingTop;
+        else child.transform.x = config.paddingLeft;
+        break;
+    }
+
+    // If child is fill, also set its size
+    if (cs.isFill) {
+      setNodeSize(child, isHorizontal ? size : undefined, isHorizontal ? undefined : size);
+    }
+
+    cursor += size + config.spacing;
   }
 
   // Set frame size if auto sizing
   if (config.primaryAxisSizing === 'auto') {
-    const totalSize = cursor - config.spacing + (isHorizontal ? config.paddingRight : config.paddingBottom);
+    const totalSize =
+      cursor - config.spacing + (isHorizontal ? config.paddingRight : config.paddingBottom);
     if (isHorizontal) {
-      frame.width = totalSize;
+      frame.width = Math.max(totalSize, 1);
     } else {
-      frame.height = totalSize;
+      frame.height = Math.max(totalSize, 1);
     }
+  }
+}
+
+/**
+ * Determine if a child should fill its axis.
+ * Checks layoutOverride.grow > 0 or counterAxisSizing === 'fill'.
+ */
+function getChildFillBehavior(child: SceneNode, isPrimaryAxis: boolean): 'fill' | 'hug' {
+  const lo = (child as any).layoutOverride as LayoutOverride | undefined;
+  if (!lo) return 'hug';
+
+  // If on primary axis and grow > 0, it fills
+  if (isPrimaryAxis && lo.grow > 0) return 'fill';
+
+  // If on counter axis and counterAxisSize is set to fill-like behavior
+  if (!isPrimaryAxis && lo.counterAxisSize !== null && lo.counterAxisSize < 0) return 'fill';
+
+  return 'hug';
+}
+
+/**
+ * Set a node's size on one or both axes.
+ * For shapes: modifies geometry. For frames: modifies width/height.
+ */
+function setNodeSize(
+  node: SceneNode,
+  width: number | undefined,
+  height: number | undefined
+): void {
+  if (node.type === 'shape') {
+    const s = node as ShapeSceneNode;
+    if (s.geometry.type === 'rect') {
+      if (width !== undefined) s.geometry.width = width;
+      if (height !== undefined) s.geometry.height = height;
+    }
+  } else if (node.type === 'frame') {
+    const f = node as FrameSceneNode;
+    if (width !== undefined) f.width = width;
+    if (height !== undefined) f.height = height;
   }
 }
 

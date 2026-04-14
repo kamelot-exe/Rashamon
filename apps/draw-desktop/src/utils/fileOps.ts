@@ -252,6 +252,38 @@ function generateNodeSvg(node: any, indent: string): string {
       result += `${indent}</g>\n`;
       break;
     }
+    case 'image': {
+      const tx = transform?.x ?? 0;
+      const ty = transform?.y ?? 0;
+      const w = node.width ?? 100;
+      const h = node.height ?? 100;
+      const imgTransform = buildTransformString({ ...transform, x: 0, y: 0 });
+      result += `${indent}<g transform="translate(${tx}, ${ty})${imgTransform ? ' ' + imgTransform : ''}" opacity="${opacity}">\n`;
+      result += `${indent}  <rect x="0" y="0" width="${w}" height="${h}" fill="#374151" rx="2" ry="2"/>\n`;
+      if (node.imageRef) {
+        // Embed as data URI if it's a base64 reference
+        if (node.imageRef.startsWith('data:')) {
+          result += `${indent}  <image href="${node.imageRef}" x="0" y="0" width="${w}" height="${h}" rx="2" ry="2"/>\n`;
+        }
+      }
+      result += `${indent}</g>\n`;
+      break;
+    }
+    case 'componentInstance': {
+      const tx = transform?.x ?? 0;
+      const ty = transform?.y ?? 0;
+      const w = node.width ?? 100;
+      const h = node.height ?? 100;
+      const instTransform = buildTransformString({ ...transform, x: 0, y: 0 });
+      result += `${indent}<g transform="translate(${tx}, ${ty})${instTransform ? ' ' + instTransform : ''}" opacity="${opacity}">\n`;
+      result += `${indent}  <rect x="0" y="0" width="${w}" height="${h}" fill="none" stroke="rgba(139,92,246,0.4)" stroke-width="1.5" stroke-dasharray="4 2" rx="2" ry="2"/>\n`;
+      // Render component content if snapshot is available
+      if (node.snapshot) {
+        result += generateNodeSvg(node.snapshot, indent + '  ');
+      }
+      result += `${indent}</g>\n`;
+      break;
+    }
   }
 
   return result;

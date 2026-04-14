@@ -14,7 +14,12 @@
       "Bash(sh *)",
       "Bash(source *)",
       "Bash(lsof *)",
-      "Bash(sed *)"
+      "Bash(sed *)",
+      "Bash(sleep *)",
+      "Bash(dpkg *)",
+      "Bash(sudo *)",
+      "Bash(kill *)",
+      "Bash(pkill *)"
     ]
   },
   "$version": 3
