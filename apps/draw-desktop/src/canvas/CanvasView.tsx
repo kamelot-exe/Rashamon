@@ -24,13 +24,13 @@ import {
   groupSelected,
   ungroupSelected,
   pushHistory,
-  enterGroup,
   exitGroup,
   getEditScopeGroupId,
   getScopedNodes,
   redo,
   mutateFrameWidth,
   mutateFrameHeight,
+  enterContainer,
 } from '../store/documentStore.js';
 import {
   handleMouseDown,
@@ -527,9 +527,9 @@ export const CanvasView: FC = () => {
       const node = findNodeById(doc.root, nodeId!);
       if (node && node.type === 'text') {
         setEditingTextId(nodeId);
-      } else if (node && node.type === 'group') {
-        // Double-click group to enter focused editing
-        enterGroup(nodeId!);
+      } else if (node && (node.type === 'group' || node.type === 'frame')) {
+        // Double-click group/frame to enter focused editing
+        enterContainer(nodeId!);
       }
     }
   }, [doc.root]);
