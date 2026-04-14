@@ -1,12 +1,7 @@
 /**
- * PropertiesPanel — inspector for the selected node(s).
- *
- * Sections:
- * - Selection summary (type, name)
- * - Transform (X, Y, W, H, Rotation)
- * - Appearance (Fill, Stroke)
- * - Semantic Role
- * - Align & Distribute (multi-selection)
+ * PropertiesPanel — minimal, contextual.
+ * Only shown when something is selected.
+ * Shows only relevant properties for the selected node.
  */
 
 import { FC, useEffect, useState } from 'react';
@@ -14,18 +9,11 @@ import type { ShapeSceneNode, TextSceneNode, FrameSceneNode } from '@rashamon/ty
 import {
   subscribe, getSelectedId, getSelectedIds, getSelectedNode,
   updateTransform, updateNodeName, updateTextContent, updateTextProperties,
-  updateFill, updateStroke, updateSemanticRole,
-  alignSelected, distributeSelected,
-  enterContainer,
+  updateFill, updateStroke,
+  alignSelected,
   mutateFrameWidth, mutateFrameHeight,
-  updateFrameBackground, updateFrameClip,
+  updateFrameBackground,
   enableAutoLayout, disableAutoLayout, updateAutoLayout,
-  getComponents, getComponent, createInstance, deleteComponent,
-  setLayoutOverride, getConstraints, setConstraints,
-  getStylesByType, applyStyleToNode,
-  detachInstance,
-  createComponentFromSelection,
-  createColorStyle,
 } from '../store/documentStore.js';
 import './PropertiesPanel.css';
 
@@ -44,471 +32,259 @@ export const PropertiesPanel: FC = () => {
     return <MultiSelectionPanel count={selectedIds.size} />;
   }
 
-  // No selection
-  if (!selectedId || !selectedNode) {
-    return (
-      <div className="properties-panel">
-        <div className="properties-panel__header">Properties</div>
-        <div className="properties-panel__empty">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-            <path d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <p>No selection</p>
-          <span>Select an object to edit properties</span>
+  // No selection (should not happen since parent hides panel)
+  if (!selectedId || !selectedNode) return null;
+
+  // Text
+  if (selectedNode.type === 'text') {
+    return <TextPanel node={selectedNode as TextSceneNode} selectedId={selectedId} />;
+  }
+
+  // Frame
+  if (selectedNode.type === 'frame') {
+    return <FramePanel node={selectedNode as FrameSceneNode} selectedId={selectedId} />;
+  }
+
+  // Group
+  if (selectedNode.type === 'group') {
+    return <GroupPanel node={selectedNode} selectedId={selectedId} />;
+  }
+
+  // Shape
+  return <ShapePanel shape={selectedNode as ShapeSceneNode} selectedId={selectedId} />;
+};
+
+// ─── Shape Panel ──────────────────────────────────────
+
+const ShapePanel: FC<{ shape: ShapeSceneNode; selectedId: string }> = ({ shape, selectedId }) => (
+  <div className="panel">
+    <PanelHeader type="shape" name={shape.name} />
+    <PanelContent>
+      <TransformSection node={shape} selectedId={selectedId} />
+      <AppearanceSection shape={shape} selectedId={selectedId} />
+    </PanelContent>
+  </div>
+);
+
+// ─── Text Panel ───────────────────────────────────────
+
+const TextPanel: FC<{ node: TextSceneNode; selectedId: string }> = ({ node, selectedId }) => (
+  <div className="panel">
+    <PanelHeader type="text" name={node.name} />
+    <PanelContent>
+      <Section label="Content">
+        <textarea
+          className="panel-input panel-input--textarea"
+          value={node.content}
+          onChange={(e) => updateTextContent(selectedId, e.target.value)}
+          rows={3}
+        />
+      </Section>
+      <div className="panel-row">
+        <Field label="Size">
+          <input className="panel-input" type="number" value={node.fontSize} min={8} onChange={(e) => updateTextProperties(selectedId, { fontSize: Number(e.target.value) })} />
+        </Field>
+        <Field label="Font">
+          <input className="panel-input" type="text" value={node.fontFamily} onChange={(e) => updateTextProperties(selectedId, { fontFamily: e.target.value })} />
+        </Field>
+      </div>
+      <ColorField label="Color" value={node.fill} onChange={(color) => updateTextProperties(selectedId, { fill: color })} />
+    </PanelContent>
+  </div>
+);
+
+// ─── Frame Panel ──────────────────────────────────────
+
+const FramePanel: FC<{ node: FrameSceneNode; selectedId: string }> = ({ node, selectedId }) => {
+  return (
+    <div className="panel">
+      <PanelHeader type="frame" name={node.name} />
+      <PanelContent>
+        <div className="panel-row">
+          <Field label="X">
+            <input className="panel-input" type="number" value={Math.round(node.transform.x)} onChange={(e) => updateTransform(selectedId, { ...node.transform, x: Number(e.target.value) })} />
+          </Field>
+          <Field label="Y">
+            <input className="panel-input" type="number" value={Math.round(node.transform.y)} onChange={(e) => updateTransform(selectedId, { ...node.transform, y: Number(e.target.value) })} />
+          </Field>
         </div>
+        <div className="panel-row">
+          <Field label="W">
+            <input className="panel-input" type="number" value={Math.round(node.width)} min={1} onChange={(e) => mutateFrameWidth(selectedId, Number(e.target.value))} />
+          </Field>
+          <Field label="H">
+            <input className="panel-input" type="number" value={Math.round(node.height)} min={1} onChange={(e) => mutateFrameHeight(selectedId, Number(e.target.value))} />
+          </Field>
+        </div>
+        <ColorField label="Fill" value={node.background ?? 'none'} onChange={(color) => updateFrameBackground(selectedId, color === 'none' ? null : color)} />
+        <AutoLayoutSection frameId={selectedId} frame={node} />
+      </PanelContent>
+    </div>
+  );
+};
+
+// ─── Group Panel ──────────────────────────────────────
+
+const GroupPanel: FC<{ node: any; selectedId: string }> = ({ node, selectedId }) => (
+  <div className="panel">
+    <PanelHeader type="group" name={node.name} />
+    <PanelContent>
+      <Field label="Name">
+        <input className="panel-input" type="text" value={node.name} onChange={(e) => updateNodeName(selectedId, e.target.value)} />
+      </Field>
+    </PanelContent>
+  </div>
+);
+
+// ─── Multi-Selection Panel ────────────────────────────
+
+const MultiSelectionPanel: FC<{ count: number }> = ({ count }) => (
+  <div className="panel">
+    <div className="panel__header">
+      <span>{count} selected</span>
+    </div>
+    <PanelContent>
+      <AlignDistributeSection />
+    </PanelContent>
+  </div>
+);
+
+// ─── Shared Sections ──────────────────────────────────
+
+const TransformSection: FC<{ node: any; selectedId: string }> = ({ node, selectedId }) => (
+  <>
+    <div className="panel-row">
+      <Field label="X">
+        <input className="panel-input" type="number" value={Math.round(node.transform.x)} onChange={(e) => updateTransform(selectedId, { ...node.transform, x: Number(e.target.value) })} />
+      </Field>
+      <Field label="Y">
+        <input className="panel-input" type="number" value={Math.round(node.transform.y)} onChange={(e) => updateTransform(selectedId, { ...node.transform, y: Number(e.target.value) })} />
+      </Field>
+    </div>
+    <div className="panel-row">
+      <Field label="W">
+        <input className="panel-input" type="number" value={Math.round(getShapeWidth(node))} readOnly />
+      </Field>
+      <Field label="H">
+        <input className="panel-input" type="number" value={Math.round(getShapeHeight(node))} readOnly />
+      </Field>
+    </div>
+  </>
+);
+
+const AppearanceSection: FC<{ shape: ShapeSceneNode; selectedId: string }> = ({ shape, selectedId }) => (
+  <>
+    <ColorField label="Fill" value={shape.fill?.color ?? 'none'} onChange={(color) => updateFill(selectedId, color === 'none' ? null : shape.fill ? { ...shape.fill, color } : { type: 'solid', color })} />
+    <StrokeField value={shape.stroke} onChange={(stroke) => updateStroke(selectedId, stroke)} />
+  </>
+);
+
+const AutoLayoutSection: FC<{ frameId: string; frame: FrameSceneNode }> = ({ frameId, frame }) => {
+  const config = frame.autoLayout;
+  if (config.mode === 'none') {
+    return (
+      <div className="panel-row">
+        <button className="panel-btn panel-btn--sm" onClick={() => enableAutoLayout(frameId, 'horizontal')}>↔</button>
+        <button className="panel-btn panel-btn--sm" onClick={() => enableAutoLayout(frameId, 'vertical')}>↕</button>
       </div>
     );
   }
 
-  // Text node
-  if (selectedNode.type === 'text') {
-    return <TextPropertiesPanel node={selectedNode as TextSceneNode} selectedId={selectedId} />;
-  }
-
-  // Frame node
-  if (selectedNode.type === 'frame') {
-    return <FramePropertiesPanel node={selectedNode as FrameSceneNode} selectedId={selectedId} />;
-  }
-
-  // Component instance node
-  if (selectedNode.type === 'componentInstance') {
-    return <ComponentInstancePanel node={selectedNode as import('@rashamon/types').ComponentInstanceNode} selectedId={selectedId} />;
-  }
-
-  // Group node
-  if (selectedNode.type === 'group') {
-    return <GroupPropertiesPanel node={selectedNode} selectedId={selectedId} />;
-  }
-
-  // Shape node
-  const shape = selectedNode as ShapeSceneNode;
-  return <ShapePropertiesPanel shape={shape} selectedId={selectedId} />;
-};
-
-// ─── Multi Selection Panel ────────────────────────────
-
-const MultiSelectionPanel: FC<{ count: number }> = ({ count }) => (
-  <div className="properties-panel">
-    <div className="properties-panel__header">
-      <span>{count} objects selected</span>
-    </div>
-    <div className="properties-panel__content">
-      <AlignDistributeSection />
-      <div className="prop-field" style={{ marginTop: 8 }}>
-        <button className="prop-btn" onClick={() => {
-          const name = prompt('Component name:', 'Component');
-          if (name) createComponentFromSelection(name);
-        }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" style={{ width: 14, height: 14 }}>
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.27 5.82 22 7 14.14 2 9.27l6.91-1.01L12 2z" />
-          </svg>
-          Create Component
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
-// ─── Shape Properties ─────────────────────────────────
-
-const ShapePropertiesPanel: FC<{ shape: ShapeSceneNode; selectedId: string }> = ({ shape, selectedId }) => (
-  <div className="properties-panel">
-    <div className="properties-panel__header">
-      <SelectionSummary nodeType={shape.type} nodeName={shape.name} />
-    </div>
-    <div className="properties-panel__content">
-      <Section title="Transform" defaultOpen>
-        <TransformFields node={shape} selectedId={selectedId} />
-      </Section>
-      <Section title="Appearance" defaultOpen>
-        <StylePickerField nodeId={selectedId} styleType="fill" />
-        <AppearanceFields shape={shape} selectedId={selectedId} />
-      </Section>
-      <Section title="Semantic Role">
-        <RoleField selectedId={selectedId} role={shape.semanticRole} />
-      </Section>
-      <ComponentsField />
-      <ConstraintsField nodeId={selectedId} />
-      <LayoutOverrideField nodeId={selectedId} />
-      <AlignDistributeSection />
-    </div>
-  </div>
-);
-
-// ─── Text Properties ──────────────────────────────────
-
-const TextPropertiesPanel: FC<{ node: TextSceneNode; selectedId: string }> = ({ node, selectedId }) => (
-  <div className="properties-panel">
-    <div className="properties-panel__header">
-      <SelectionSummary nodeType="text" nodeName={node.name} />
-    </div>
-    <div className="properties-panel__content">
-      <Section title="Transform" defaultOpen>
-        <div className="prop-row">
-          <Field label="X">
-            <input className="prop-input" type="number" value={Math.round(node.transform.x)} onChange={(e) => updateTransform(selectedId, { ...node.transform, x: Number(e.target.value) })} />
-          </Field>
-          <Field label="Y">
-            <input className="prop-input" type="number" value={Math.round(node.transform.y)} onChange={(e) => updateTransform(selectedId, { ...node.transform, y: Number(e.target.value) })} />
-          </Field>
-        </div>
-      </Section>
-      <Section title="Content" defaultOpen>
-        <textarea className="prop-input prop-input--textarea" value={node.content} onChange={(e) => updateTextContent(selectedId, e.target.value)} rows={3} />
-      </Section>
-      <Section title="Typography">
-        <Field label="Size">
-          <input className="prop-input" type="number" value={node.fontSize} min={8} onChange={(e) => updateTextProperties(selectedId, { fontSize: Number(e.target.value) })} />
-        </Field>
-        <Field label="Font">
-          <input className="prop-input" type="text" value={node.fontFamily} onChange={(e) => updateTextProperties(selectedId, { fontFamily: e.target.value })} />
-        </Field>
-      </Section>
-      <Section title="Appearance">
-        <ColorField label="Color" value={node.fill} onChange={(color) => updateTextProperties(selectedId, { fill: color })} />
-      </Section>
-    </div>
-  </div>
-);
-
-// ─── Frame Properties ─────────────────────────────────
-
-const FramePropertiesPanel: FC<{ node: FrameSceneNode; selectedId: string }> = ({ node, selectedId }) => (
-  <div className="properties-panel">
-    <div className="properties-panel__header">
-      <SelectionSummary nodeType="frame" nodeName={node.name} />
-    </div>
-    <div className="properties-panel__content">
-      <Section title="Transform" defaultOpen>
-        <div className="prop-row">
-          <Field label="X">
-            <input className="prop-input" type="number" value={Math.round(node.transform.x)} onChange={(e) => updateTransform(selectedId, { ...node.transform, x: Number(e.target.value) })} />
-          </Field>
-          <Field label="Y">
-            <input className="prop-input" type="number" value={Math.round(node.transform.y)} onChange={(e) => updateTransform(selectedId, { ...node.transform, y: Number(e.target.value) })} />
-          </Field>
-        </div>
-        <div className="prop-row">
-          <Field label="W">
-            <input className="prop-input" type="number" value={Math.round(node.width)} min={1} onChange={(e) => mutateFrameWidth(selectedId, Number(e.target.value))} />
-          </Field>
-          <Field label="H">
-            <input className="prop-input" type="number" value={Math.round(node.height)} min={1} onChange={(e) => mutateFrameHeight(selectedId, Number(e.target.value))} />
-          </Field>
-        </div>
-      </Section>
-      <Section title="Appearance" defaultOpen>
-        <ColorField
-          label="Background"
-          value={node.background ?? 'none'}
-          onChange={(color) => updateFrameBackground(selectedId, color === 'none' ? null : color)}
-        />
-        <div className="prop-field">
-          <label className="prop-checkbox">
-            <input
-              type="checkbox"
-              checked={node.clipContent}
-              onChange={(e) => updateFrameClip(selectedId, e.target.checked)}
-            />
-            Clip content
-          </label>
-        </div>
-      </Section>
-      <Section title="Semantic Role">
-        <RoleField selectedId={selectedId} role={node.semanticRole} />
-      </Section>
-
-      <Section title="Auto Layout">
-        <AutoLayoutFields frameId={selectedId} frame={node} />
-      </Section>
-
-      <div className="prop-field" style={{ marginTop: 8 }}>
-        <button className="prop-btn" onClick={() => enterContainer(selectedId)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" style={{ width: 14, height: 14 }}>
-            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-          </svg>
-          Enter Frame
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
-// ─── Group Properties ─────────────────────────────────
-
-const GroupPropertiesPanel: FC<{ node: any; selectedId: string }> = ({ node, selectedId }) => (
-  <div className="properties-panel">
-    <div className="properties-panel__header">
-      <SelectionSummary nodeType="group" nodeName={node.name} />
-    </div>
-    <div className="properties-panel__content">
-      <Section title="Name" defaultOpen>
-        <Field label="Name">
-          <input className="prop-input" type="text" value={node.name} onChange={(e) => updateNodeName(selectedId, e.target.value)} />
-        </Field>
-      </Section>
-      <ComponentsField />
-      <p className="properties-panel__hint">Use Layers panel to manage children</p>
-    </div>
-  </div>
-);
-
-// ─── Component Instance ────────────────────────────────
-
-const ComponentInstancePanel: FC<{ node: import('@rashamon/types').ComponentInstanceNode; selectedId: string }> = ({ node, selectedId }) => {
-  const comp = getComponent(node.componentId);
   return (
-    <div className="properties-panel">
-      <div className="properties-panel__header">
-        <span className="selection-summary__type" style={{ background: 'rgba(139,92,246,0.12)', color: '#a78bfa' }}>
-          component
-        </span>
-        <span className="selection-summary__name">{node.name}</span>
+    <div className="panel-row panel-row--stacked">
+      <div className="panel-row">
+        <button
+          className={`panel-btn panel-btn--sm ${config.mode === 'horizontal' ? 'panel-btn--active' : ''}`}
+          onClick={() => config.mode === 'horizontal' ? disableAutoLayout(frameId) : enableAutoLayout(frameId, 'horizontal')}
+        >↔</button>
+        <button
+          className={`panel-btn panel-btn--sm ${config.mode === 'vertical' ? 'panel-btn--active' : ''}`}
+          onClick={() => config.mode === 'vertical' ? disableAutoLayout(frameId) : enableAutoLayout(frameId, 'vertical')}
+        >↕</button>
+        <Field label="Gap">
+          <input className="panel-input" type="number" value={config.spacing} min={0} onChange={(e) => updateAutoLayout(frameId, { spacing: Number(e.target.value) })} style={{ width: 48 }} />
+        </Field>
       </div>
-      <div className="properties-panel__content">
-        <Section title="Transform" defaultOpen>
-          <div className="prop-row">
-            <Field label="X">
-              <input className="prop-input" type="number" value={Math.round(node.transform.x)} onChange={(e) => updateTransform(selectedId, { ...node.transform, x: Number(e.target.value) })} />
-            </Field>
-            <Field label="Y">
-              <input className="prop-input" type="number" value={Math.round(node.transform.y)} onChange={(e) => updateTransform(selectedId, { ...node.transform, y: Number(e.target.value) })} />
-            </Field>
-          </div>
-        </Section>
-        {comp && (
-          <div className="prop-field">
-            <span className="prop-field__label">Based on: {comp.name}</span>
-          </div>
-        )}
-        {node.overrides.length > 0 && (
-          <Section title={`Overrides (${node.overrides.length})`}>
-            {node.overrides.map((o, i) => (
-              <div key={i} className="prop-row" style={{ fontSize: 11 }}>
-                <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                  {o.property}
-                </span>
-              </div>
-            ))}
-          </Section>
-        )}
-        <div className="prop-field" style={{ marginTop: 8 }}>
-          <button className="prop-btn" onClick={() => detachInstance(selectedId)} style={{ color: 'var(--color-warning)' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" style={{ width: 14, height: 14 }}>
-              <path d="M12 9v6M9 12h6M3 3l18 18" />
-            </svg>
-            Detach instance
-          </button>
-        </div>
+      <div className="panel-row">
+        <Field label="Pad L">
+          <input className="panel-input" type="number" value={config.paddingLeft} min={0} onChange={(e) => updateAutoLayout(frameId, { paddingLeft: Number(e.target.value) })} style={{ width: 48 }} />
+        </Field>
+        <Field label="Pad R">
+          <input className="panel-input" type="number" value={config.paddingRight} min={0} onChange={(e) => updateAutoLayout(frameId, { paddingRight: Number(e.target.value) })} style={{ width: 48 }} />
+        </Field>
+        <Field label="Pad T">
+          <input className="panel-input" type="number" value={config.paddingTop} min={0} onChange={(e) => updateAutoLayout(frameId, { paddingTop: Number(e.target.value) })} style={{ width: 48 }} />
+        </Field>
+        <Field label="Pad B">
+          <input className="panel-input" type="number" value={config.paddingBottom} min={0} onChange={(e) => updateAutoLayout(frameId, { paddingBottom: Number(e.target.value) })} style={{ width: 48 }} />
+        </Field>
       </div>
     </div>
   );
 };
-
-// ─── Section / Field Components ───────────────────────
-
-const Section: FC<{ title: string; children: React.ReactNode; defaultOpen?: boolean }> = ({ title, children, defaultOpen = true }) => {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="prop-section">
-      <button className="prop-section__title" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <svg
-          className={`prop-section__chevron ${open ? 'prop-section__chevron--open' : ''}`}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          aria-hidden="true"
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-        <span>{title}</span>
-      </button>
-      {open && <div className="prop-section__content">{children}</div>}
-    </div>
-  );
-};
-
-const Field: FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-  <div className="prop-field">
-    <span className="prop-field__label">{label}</span>
-    {children}
-  </div>
-);
-
-// ─── Selection Summary ────────────────────────────────
-
-const SelectionSummary: FC<{ nodeType: string; nodeName: string }> = ({ nodeType, nodeName }) => (
-  <div className="selection-summary">
-    <span className="selection-summary__type">{nodeType}</span>
-    <span className="selection-summary__name">{nodeName}</span>
-  </div>
-);
-
-// ─── Transform Fields ─────────────────────────────────
-
-const TransformFields: FC<{ node: any; selectedId: string }> = ({ node, selectedId }) => (
-  <>
-    <div className="prop-row">
-      <Field label="X">
-        <input className="prop-input" type="number" value={Math.round(node.transform.x)} onChange={(e) => updateTransform(selectedId, { ...node.transform, x: Number(e.target.value) })} />
-      </Field>
-      <Field label="Y">
-        <input className="prop-input" type="number" value={Math.round(node.transform.y)} onChange={(e) => updateTransform(selectedId, { ...node.transform, y: Number(e.target.value) })} />
-      </Field>
-    </div>
-    <div className="prop-row">
-      <Field label="W">
-        <input className="prop-input" type="number" value={Math.round(getShapeWidth(node))} onChange={(e) => updateShapeDimension(node, selectedId, 'width', Number(e.target.value))} />
-      </Field>
-      <Field label="H">
-        <input className="prop-input" type="number" value={Math.round(getShapeHeight(node))} onChange={(e) => updateShapeDimension(node, selectedId, 'height', Number(e.target.value))} />
-      </Field>
-    </div>
-    <Field label="Rotation">
-      <input className="prop-input" type="number" value={Math.round(node.transform.rotation)} onChange={(e) => updateTransform(selectedId, { ...node.transform, rotation: Number(e.target.value) })} />
-    </Field>
-  </>
-);
-
-// ─── Appearance Fields ────────────────────────────────
-
-const AppearanceFields: FC<{ shape: ShapeSceneNode; selectedId: string }> = ({ shape, selectedId }) => (
-  <>
-    <ColorField
-      label="Fill"
-      value={shape.fill?.color ?? 'none'}
-      onChange={(color) => updateFill(selectedId, color === 'none' ? null : shape.fill ? { ...shape.fill, color } : { type: 'solid', color })}
-    />
-    <StrokeField
-      value={shape.stroke}
-      onChange={(stroke) => updateStroke(selectedId, stroke)}
-    />
-  </>
-);
-
-const ColorField: FC<{ label: string; value: string; onChange: (color: string) => void }> = ({ label, value, onChange }) => (
-  <div className="prop-row prop-row--color">
-    <span className="prop-label">{label}</span>
-    <input
-      className="prop-input prop-input--color"
-      type="color"
-      value={value === 'none' ? '#000000' : value}
-      onChange={(e) => onChange(e.target.value)}
-    />
-    <input
-      className="prop-input prop-input--color-text"
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
-    <button
-      className="prop-btn prop-btn--icon"
-      title="Save as style"
-      onClick={() => {
-        const name = prompt(`Save "${label}" as style:`, `${label} Style`);
-        if (name && value !== 'none') createColorStyle(name, value);
-      }}
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" style={{ width: 14, height: 14 }}>
-        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-        <path d="M17 21v-8H7v8M7 3v5h8" />
-      </svg>
-    </button>
-  </div>
-);
-
-const StrokeField: FC<{ value: any; onChange: (stroke: any) => void }> = ({ value, onChange }) => (
-  <div className="prop-row prop-row--color">
-    <span className="prop-label">Stroke</span>
-    <input
-      className="prop-input prop-input--color"
-      type="color"
-      value={value?.color ?? '#000000'}
-      onChange={(e) => onChange(value ? { ...value, color: e.target.value } : { color: e.target.value, width: 1, lineCap: 'butt', lineJoin: 'miter' })}
-    />
-    <input
-      className="prop-input"
-      type="number"
-      value={value?.width ?? 0}
-      min={0}
-      max={50}
-      style={{ width: '52px' }}
-      onChange={(e) => {
-        const w = Number(e.target.value);
-        onChange(w <= 0 ? null : value ? { ...value, width: w } : { color: '#000000', width: w, lineCap: 'butt', lineJoin: 'miter' });
-      }}
-    />
-    <span className="prop-unit">px</span>
-  </div>
-);
-
-// ─── Role Field ───────────────────────────────────────
-
-const RoleField: FC<{ selectedId: string; role: string | object | undefined }> = ({ selectedId, role }) => {
-  const roleStr = typeof role === 'string' ? role : 'none';
-  return (
-    <div className="prop-field">
-      <select
-        className="prop-input prop-input--select"
-        value={roleStr}
-        onChange={(e) => updateSemanticRole(selectedId, e.target.value === 'none' ? undefined : e.target.value as import('@rashamon/types').SemanticRole)}
-      >
-        <option value="none">None</option>
-        <option value="background">Background</option>
-        <option value="foreground">Foreground</option>
-        <option value="annotation">Annotation</option>
-        <option value="guide">Guide</option>
-      </select>
-      {roleStr !== 'none' && (
-        <span className="role-badge">{roleStr}</span>
-      )}
-    </div>
-  );
-};
-
-// ─── Align & Distribute ───────────────────────────────
 
 const AlignDistributeSection: FC = () => {
   const selectedIds = getSelectedIds();
   if (selectedIds.size < 2) return null;
 
   return (
-    <Section title="Align & Distribute">
-      <div className="align-grid">
-        <button className="align-btn" onClick={() => alignSelected('left')} title="Align Left">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M17 10H3M21 6H3M21 14H3M17 18H3" strokeLinecap="round" /></svg>
-        </button>
-        <button className="align-btn" onClick={() => alignSelected('centerH')} title="Center H">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M12 3v18M16 7H8M16 11H8M16 13H8M16 17H8" strokeLinecap="round" /></svg>
-        </button>
-        <button className="align-btn" onClick={() => alignSelected('right')} title="Align Right">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M7 10h14M3 6h18M3 14h18M7 18h14" strokeLinecap="round" /></svg>
-        </button>
-        <button className="align-btn" onClick={() => alignSelected('top')} title="Align Top">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M10 17V3M6 21V3M14 21V3M18 17V3" strokeLinecap="round" /></svg>
-        </button>
-        <button className="align-btn" onClick={() => alignSelected('middleV')} title="Middle V">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 12h18M7 16V8M11 16V8M13 16V8M17 16V8" strokeLinecap="round" /></svg>
-        </button>
-        <button className="align-btn" onClick={() => alignSelected('bottom')} title="Align Bottom">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M10 7v14M6 3v18M14 3v18M18 7v14" strokeLinecap="round" /></svg>
-        </button>
+    <div className="panel-row panel-row--stacked">
+      <div className="panel-row">
+        <button className="panel-btn panel-btn--sm" onClick={() => alignSelected('left')} title="Left">←</button>
+        <button className="panel-btn panel-btn--sm" onClick={() => alignSelected('centerH')} title="Center H">↔</button>
+        <button className="panel-btn panel-btn--sm" onClick={() => alignSelected('right')} title="Right">→</button>
       </div>
-      <div className="prop-row" style={{ marginTop: 6 }}>
-        <button className="align-btn align-btn--wide" onClick={() => distributeSelected('horizontal')}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 12h18M8 6v12M16 6v12" strokeLinecap="round" /></svg>
-          Distribute H
-        </button>
-        <button className="align-btn align-btn--wide" onClick={() => distributeSelected('vertical')}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M12 3v18M6 8h12M6 16h12" strokeLinecap="round" /></svg>
-          Distribute V
-        </button>
+      <div className="panel-row">
+        <button className="panel-btn panel-btn--sm" onClick={() => alignSelected('top')} title="Top">↑</button>
+        <button className="panel-btn panel-btn--sm" onClick={() => alignSelected('middleV')} title="Middle V">↕</button>
+        <button className="panel-btn panel-btn--sm" onClick={() => alignSelected('bottom')} title="Bottom">↓</button>
       </div>
-    </Section>
+    </div>
   );
 };
+
+// ─── Shared Components ────────────────────────────────
+
+const PanelHeader: FC<{ type: string; name: string }> = ({ type, name }) => (
+  <div className="panel__header">
+    <span className="panel__type">{type}</span>
+    <span className="panel__name">{name}</span>
+  </div>
+);
+
+const PanelContent: FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="panel__content">{children}</div>
+);
+
+const Section: FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <div className="panel-section">
+    <span className="panel-section__label">{label}</span>
+    {children}
+  </div>
+);
+
+const Field: FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <div className="panel-field">
+    <span className="panel-field__label">{label}</span>
+    {children}
+  </div>
+);
+
+const ColorField: FC<{ label: string; value: string; onChange: (color: string) => void }> = ({ label, value, onChange }) => (
+  <div className="panel-row">
+    <span className="panel-field__label">{label}</span>
+    <input className="panel-input panel-input--color" type="color" value={value === 'none' ? '#000000' : value} onChange={(e) => onChange(e.target.value)} />
+    <input className="panel-input panel-input--color-text" type="text" value={value} onChange={(e) => onChange(e.target.value)} />
+  </div>
+);
+
+const StrokeField: FC<{ value: any; onChange: (stroke: any) => void }> = ({ value, onChange }) => (
+  <div className="panel-row">
+    <span className="panel-field__label">Stroke</span>
+    <input className="panel-input panel-input--color" type="color" value={value?.color ?? '#000000'} onChange={(e) => onChange(value ? { ...value, color: e.target.value } : { color: e.target.value, width: 1, lineCap: 'butt', lineJoin: 'miter' })} />
+    <input className="panel-input" type="number" value={value?.width ?? 0} min={0} max={50} style={{ width: 48 }} onChange={(e) => { const w = Number(e.target.value); onChange(w <= 0 ? null : value ? { ...value, width: w } : { color: '#000000', width: w, lineCap: 'butt', lineJoin: 'miter' }); }} />
+  </div>
+);
 
 // ─── Helpers ──────────────────────────────────────────
 
@@ -527,265 +303,3 @@ function getShapeHeight(shape: any): number {
   if (g.type === 'line') return Math.abs(g.y2 - g.y1);
   return 0;
 }
-
-function updateShapeDimension(shape: any, selectedId: string, dim: 'width' | 'height', value: number) {
-  const g = shape.geometry;
-  if (g.type === 'rect') {
-    if (dim === 'width') g.width = value;
-    else g.height = value;
-    updateTransform(selectedId, { ...shape.transform });
-  }
-}
-
-// ─── Auto Layout Fields ─────────────────────────────────
-
-const AutoLayoutFields: FC<{ frameId: string; frame: FrameSceneNode }> = ({ frameId, frame }) => {
-  const config = frame.autoLayout;
-  return (
-    <>
-      <div className="prop-row">
-        <button
-          className={`prop-btn ${config.mode === 'horizontal' ? 'prop-btn--active' : ''}`}
-          onClick={() => enableAutoLayout(frameId, 'horizontal')}
-          style={{ flex: 1 }}
-        >
-          ↔ Horizontal
-        </button>
-        <button
-          className={`prop-btn ${config.mode === 'vertical' ? 'prop-btn--active' : ''}`}
-          onClick={() => enableAutoLayout(frameId, 'vertical')}
-          style={{ flex: 1 }}
-        >
-          ↕ Vertical
-        </button>
-        {config.mode !== 'none' && (
-          <button className="prop-btn" onClick={() => disableAutoLayout(frameId)} title="Disable auto layout">
-            ✕
-          </button>
-        )}
-      </div>
-      {config.mode !== 'none' && (
-        <>
-          <div className="prop-row">
-            <Field label="Primary">
-              <select
-                className="prop-input prop-input--select"
-                value={config.primaryAxisSizing}
-                onChange={(e) => updateAutoLayout(frameId, { primaryAxisSizing: e.target.value as any })}
-              >
-                <option value="fixed">Fixed</option>
-                <option value="auto">Hug content</option>
-                <option value="fill">Fill parent</option>
-              </select>
-            </Field>
-            <Field label="Counter">
-              <select
-                className="prop-input prop-input--select"
-                value={config.counterAxisSizing}
-                onChange={(e) => updateAutoLayout(frameId, { counterAxisSizing: e.target.value as any })}
-              >
-                <option value="auto">Hug content</option>
-                <option value="fixed">Fixed</option>
-                <option value="fill">Fill parent</option>
-              </select>
-            </Field>
-          </div>
-          <div className="prop-row">
-            <Field label="P. Align">
-              <select
-                className="prop-input prop-input--select"
-                value={config.primaryAxisAlign}
-                onChange={(e) => updateAutoLayout(frameId, { primaryAxisAlign: e.target.value as any })}
-              >
-                <option value="min">Start</option>
-                <option value="center">Center</option>
-                <option value="max">End</option>
-                <option value="spaceBetween">Space between</option>
-              </select>
-            </Field>
-            <Field label="C. Align">
-              <select
-                className="prop-input prop-input--select"
-                value={config.counterAxisAlign}
-                onChange={(e) => updateAutoLayout(frameId, { counterAxisAlign: e.target.value as any })}
-              >
-                <option value="min">Top/Left</option>
-                <option value="center">Center</option>
-                <option value="max">Bottom/Right</option>
-                <option value="spaceBetween">Space between</option>
-              </select>
-            </Field>
-          </div>
-          <Field label="Spacing">
-            <input className="prop-input" type="number" value={config.spacing} min={0} onChange={(e) => updateAutoLayout(frameId, { spacing: Number(e.target.value) })} />
-          </Field>
-          <div className="prop-row">
-            <Field label="Pad L">
-              <input className="prop-input" type="number" value={config.paddingLeft} min={0} onChange={(e) => updateAutoLayout(frameId, { paddingLeft: Number(e.target.value) })} />
-            </Field>
-            <Field label="Pad R">
-              <input className="prop-input" type="number" value={config.paddingRight} min={0} onChange={(e) => updateAutoLayout(frameId, { paddingRight: Number(e.target.value) })} />
-            </Field>
-          </div>
-          <div className="prop-row">
-            <Field label="Pad T">
-              <input className="prop-input" type="number" value={config.paddingTop} min={0} onChange={(e) => updateAutoLayout(frameId, { paddingTop: Number(e.target.value) })} />
-            </Field>
-            <Field label="Pad B">
-              <input className="prop-input" type="number" value={config.paddingBottom} min={0} onChange={(e) => updateAutoLayout(frameId, { paddingBottom: Number(e.target.value) })} />
-            </Field>
-          </div>
-        </>
-      )}
-    </>
-  );
-};
-
-// ─── Components Field ────────────────────────────────────
-
-const ComponentsField: FC = () => {
-  const components = getComponents();
-  if (components.length === 0) return null;
-
-  return (
-    <div className="prop-field">
-      <span className="prop-field__label">Components</span>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {components.map((comp) => (
-          <div key={comp.id} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <button
-              className="prop-btn"
-              onClick={() => createInstance(comp.id, { x: 100, y: 100 })}
-              style={{ flex: 1 }}
-              title={`Create instance of ${comp.name}`}
-            >
-              + {comp.name}
-            </button>
-            <button
-              className="prop-btn"
-              onClick={() => deleteComponent(comp.id)}
-              style={{ width: 28, padding: 0, color: 'var(--color-danger)' }}
-              title={`Delete ${comp.name}`}
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// ─── Style Picker ───────────────────────────────────────
-
-const StylePickerField: FC<{ nodeId: string; styleType: 'fill' | 'text' }> = ({ nodeId, styleType }) => {
-  const styles = getStylesByType(styleType === 'fill' ? 'color' : 'text');
-  if (styles.length === 0) return null;
-
-  return (
-    <div className="prop-row prop-row--style-picker">
-      <span className="prop-label">Style</span>
-      <select
-        className="prop-input prop-input--select"
-        style={{ flex: 1 }}
-        defaultValue=""
-        onChange={(e) => {
-          if (e.target.value) {
-            applyStyleToNode(nodeId, e.target.value, styleType);
-          }
-        }}
-      >
-        <option value="" disabled>Apply style...</option>
-        {styles.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name}
-            {s.type === 'color' && ` (${(s as any).color})`}
-            {s.type === 'text' && ` (${(s as any).fontFamily} ${(s as any).fontSize}px)`}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-};
-
-// ─── Constraints Field ──────────────────────────────────
-
-const ConstraintsField: FC<{ nodeId: string }> = ({ nodeId }) => {
-  const constraints = getConstraints(nodeId);
-  const current = constraints || { horizontal: 'left' as const, vertical: 'top' as const };
-
-  return (
-    <div className="prop-field">
-      <span className="prop-field__label">Constraints</span>
-      <div className="prop-row">
-        <select
-          className="prop-input prop-input--select"
-          value={current.horizontal}
-          onChange={(e) =>
-            setConstraints(nodeId, {
-              horizontal: e.target.value as any,
-              vertical: current.vertical,
-            })
-          }
-        >
-          <option value="left">Left</option>
-          <option value="right">Right</option>
-          <option value="center">Center H</option>
-          <option value="leftRight">Left & Right</option>
-          <option value="scale">Scale</option>
-        </select>
-        <select
-          className="prop-input prop-input--select"
-          value={current.vertical}
-          onChange={(e) =>
-            setConstraints(nodeId, {
-              horizontal: current.horizontal,
-              vertical: e.target.value as any,
-            })
-          }
-        >
-          <option value="top">Top</option>
-          <option value="bottom">Bottom</option>
-          <option value="center">Center V</option>
-          <option value="topBottom">Top & Bottom</option>
-          <option value="scale">Scale</option>
-        </select>
-      </div>
-    </div>
-  );
-};
-
-// ─── Layout Override Field ──────────────────────────────
-
-const LayoutOverrideField: FC<{ nodeId: string }> = ({ nodeId }) => {
-  return (
-    <div className="prop-field">
-      <span className="prop-field__label">Layout Override</span>
-      <div className="prop-row">
-        <Field label="Grow">
-          <input
-            className="prop-input"
-            type="number"
-            min={0}
-            step={0.5}
-            defaultValue={0}
-            onChange={(e) => setLayoutOverride(nodeId, { grow: Number(e.target.value) })}
-          />
-        </Field>
-        <Field label="Shrink">
-          <input
-            className="prop-input"
-            type="number"
-            min={0}
-            step={0.5}
-            defaultValue={1}
-            onChange={(e) => setLayoutOverride(nodeId, { shrink: Number(e.target.value) })}
-          />
-        </Field>
-      </div>
-    </div>
-  );
-};
-
-// ─── Components Field ────────────────────────────────────
-

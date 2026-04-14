@@ -2,109 +2,33 @@
 
 .history-panel {
   display: flex;
-  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2);
+  border-top: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
-.history-panel__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  border: none;
-  border-top: 1px solid var(--color-border-subtle);
-  background: transparent;
-  cursor: pointer;
-  width: 100%;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-family: inherit;
-  transition: color var(--transition-fast);
-}
-
-.history-panel__header:hover {
-  color: var(--color-text-primary);
-}
-
-.history-panel__chevron {
-  width: 14px;
-  height: 14px;
-  transition: transform var(--transition-fast);
-  transform: rotate(-90deg);
-}
-
-.history-panel__chevron--open {
-  transform: rotate(0deg);
-}
-
-.history-panel__content {
-  padding: var(--space-3) var(--space-4);
-}
-
-/* ─── Navigation ───────────────────────────────────── */
-
-.history-nav {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.history-nav__btn {
+.history-panel__btn {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   padding: var(--space-2);
   cursor: pointer;
   transition: all var(--transition-fast);
-  height: 30px;
+  height: 24px;
 }
 
-.history-nav__btn:hover:not(:disabled) {
+.history-panel__btn:hover:not(:disabled) {
   background: var(--color-bg-hover);
   color: var(--color-text-primary);
-  border-color: var(--color-accent-border);
 }
 
-.history-nav__btn:disabled {
+.history-panel__btn:disabled {
   color: var(--color-text-disabled);
   cursor: not-allowed;
-  border-color: var(--color-border-subtle);
-}
-
-.history-nav__btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-/* ─── Branch Indicator ─────────────────────────────── */
-
-.history-branch {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-surface);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  margin-top: var(--space-3);
-}
-
-.history-branch--forked {
-  background: var(--color-accent-dim);
-  color: var(--color-accent);
-  border: 1px solid var(--color-accent-border);
-}
-
-.history-branch svg {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
 }
