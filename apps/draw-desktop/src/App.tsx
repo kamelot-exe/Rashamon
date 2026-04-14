@@ -24,9 +24,10 @@ import {
   getDocument, subscribe, canUndo, canRedo, undo, redo,
   getEditScopeGroup, getSelectedIds,
   addFrameNode,
+  getSelectedNodes,
 } from './store/documentStore.js';
 import { handleNewDocument, handleSaveDocument, handleOpenDocument, handleExportSvg, handleExportPng } from './utils/fileOps.js';
-import { resetTransform, getCanvasTransform, subscribe as subscribeTransform } from './store/canvasTransformStore.js';
+import { resetTransform, getCanvasTransform, subscribe as subscribeTransform, updateZoomAroundPoint, setPan } from './store/canvasTransformStore.js';
 import { getActiveTool, subscribeTool } from './tools/toolSystem.js';
 import './styles/global.css';
 
@@ -59,6 +60,62 @@ const TopBar: FC = () => {
     const x = (doc.canvas.width / 2 - preset.w / 2) - (ct.panX / ct.zoom);
     const y = (doc.canvas.height / 2 - preset.h / 2) - (ct.panY / ct.zoom);
     addFrameNode(preset.w, preset.h, preset.label, '#FFFFFF', { x, y });
+  };
+
+  const zoomIn = () => {
+    const ct = getCanvasTransform();
+    updateZoomAroundPoint(window.innerWidth / 2, window.innerHeight / 2, ct.zoom * 1.25);
+  };
+
+  const zoomOut = () => {
+    const ct = getCanvasTransform();
+    updateZoomAroundPoint(window.innerWidth / 2, window.innerHeight / 2, ct.zoom / 1.25);
+  };
+
+  const zoomTo100 = () => {
+    const ct = getCanvasTransform();
+    const factor = 1 / ct.zoom;
+    updateZoomAroundPoint(window.innerWidth / 2, window.innerHeight / 2, 1);
+    setPan(-ct.panX * (factor - 1) + ct.panX, -ct.panY * (factor - 1) + ct.panY);
+  };
+
+  const fitToScreen = () => {
+    const cw = doc.canvas.width;
+    const ch = doc.canvas.height;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight - 48 - 28; // topbar + statusbar
+    const fitZoom = Math.min(vw / cw, vh / ch) * 0.9;
+    updateZoomAroundPoint(window.innerWidth / 2, window.innerHeight / 2, fitZoom);
+    setPan((vw - cw * fitZoom) / 2, (vh - ch * fitZoom) / 2);
+  };
+
+  const zoomToSelection = () => {
+    const nodes = getSelectedNodes();
+    if (nodes.length === 0) return;
+    // Compute bounding box
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of nodes) {
+      const x = n.transform.x, y = n.transform.y;
+      let w = 0, h = 0;
+      if (n.type === 'shape' && (n as any).geometry) {
+        const g = (n as any).geometry;
+        if (g.type === 'rect') { w = g.width; h = g.height; }
+        if (g.type === 'ellipse') { w = g.rx * 2; h = g.ry * 2; }
+      }
+      if (n.type === 'frame') { w = (n as any).width; h = (n as any).height; }
+      if (n.type === 'text') { w = (n as any).content.length * (n as any).fontSize * 0.5; h = (n as any).fontSize; }
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + w);
+      maxY = Math.max(maxY, y + h);
+    }
+    const bw = maxX - minX, bh = maxY - minY;
+    const vw = window.innerWidth, vh = window.innerHeight - 48 - 28;
+    const fitZoom = Math.min(vw / bw, vh / bh) * 0.85;
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    updateZoomAroundPoint(vw / 2, vh / 2, fitZoom);
+    const ct = getCanvasTransform();
+    setPan(vw / 2 - cx * ct.zoom, vh / 2 - cy * ct.zoom);
   };
 
   const zoomPercent = Math.round(zoom * 100);
@@ -125,12 +182,29 @@ const TopBar: FC = () => {
       {/* Spacer */}
       <div className="topbar__spacer" />
 
-      {/* Zoom display */}
-      <div className="topbar__zoom" title="Zoom level">
-        {zoomPercent}%
+      {/* Zoom controls */}
+      <div className="topbar__group">
+        <button className="topbar__btn topbar__btn--icon" onClick={zoomOut} title="Zoom out (Ctrl+-)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" style={{ width: 16, height: 16 }}><path d="M5 12h14" /></svg>
+        </button>
+        <button className="topbar__btn" onClick={() => {}} style={{ width: 52, justifyContent: 'center', cursor: 'default' }}>
+          {zoomPercent}%
+        </button>
+        <button className="topbar__btn topbar__btn--icon" onClick={zoomIn} title="Zoom in (Ctrl+=)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" style={{ width: 16, height: 16 }}><path d="M12 5v14M5 12h14" /></svg>
+        </button>
       </div>
 
-      {/* Document title */}
+      <div className="topbar__separator" />
+
+      {/* View navigation */}
+      <div className="topbar__group">
+        <button className="topbar__btn" onClick={fitToScreen} title="Fit to screen">Fit</button>
+        <button className="topbar__btn" onClick={zoomTo100} title="100% zoom">100%</button>
+        <button className="topbar__btn" onClick={zoomToSelection} title="Zoom to selection" disabled={getSelectedIds().size === 0}>Selection</button>
+      </div>
+
+      <div className="topbar__separator" />
       <div className="topbar__doc-title">{doc.metadata.title || 'Untitled'}</div>
     </header>
   );

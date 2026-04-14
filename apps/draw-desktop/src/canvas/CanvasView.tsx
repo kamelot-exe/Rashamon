@@ -29,6 +29,8 @@ import {
   getEditScopeGroupId,
   getScopedNodes,
   redo,
+  mutateFrameWidth,
+  mutateFrameHeight,
 } from '../store/documentStore.js';
 import {
   handleMouseDown,
@@ -88,13 +90,44 @@ export const CanvasView: FC = () => {
   const handleResize = useCallback(
     (nodeId: string, handle: string, dx: number, dy: number, _shiftKey: boolean, isStart: boolean, isEnd: boolean) => {
       const node = findNodeById(doc.root, nodeId);
-      if (!node || node.type !== 'shape') return;
+      if (!node) return;
 
       const pushHistory = isStart;
-
-      // Apply snap to delta if enabled
       const stepX = (_shiftKey || snapToGrid) ? Math.round(dx / gridSize) * gridSize : dx;
       const stepY = (_shiftKey || snapToGrid) ? Math.round(dy / gridSize) * gridSize : dy;
+
+      // Frame resize
+      if (node.type === 'frame') {
+        const frame = node as import('@rashamon/types').FrameSceneNode;
+        const isLeft = handle.includes('l');
+        const isTop = handle.includes('t');
+        const isRight = handle.includes('r') && !handle.includes('m');
+        const isBottom = handle.includes('b') && !handle.includes('l');
+
+        let newX = frame.transform.x;
+        let newY = frame.transform.y;
+        let newW = frame.width;
+        let newH = frame.height;
+
+        if (isLeft) { newX += stepX; newW -= stepX; }
+        if (isRight) { newW += stepX; }
+        if (isTop) { newY += stepY; newH -= stepY; }
+        if (isBottom) { newH += stepY; }
+
+        if (newW < 10) { newW = 10; if (isLeft) newX = frame.transform.x + frame.width - 10; }
+        if (newH < 10) { newH = 10; if (isTop) newY = frame.transform.y + frame.height - 10; }
+
+        // Use mutateFrameWidth/Height which handles constraints + auto-layout
+        if (Math.abs(newW - frame.width) > 0.1) mutateFrameWidth(nodeId, Math.round(newW));
+        if (Math.abs(newH - frame.height) > 0.1) mutateFrameHeight(nodeId, Math.round(newH));
+        updateTransform(nodeId, { x: newX, y: newY });
+
+        if (isEnd) isResizing.current = false;
+        else isResizing.current = true;
+        return;
+      }
+
+      if (node.type !== 'shape') return;
 
       const geo = node.geometry;
       if (geo.type === 'rect') {

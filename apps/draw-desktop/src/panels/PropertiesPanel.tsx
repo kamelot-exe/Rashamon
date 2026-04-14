@@ -24,6 +24,7 @@ import {
   setLayoutOverride, getConstraints, setConstraints,
   getStylesByType, applyStyleToNode,
   detachInstance,
+  createComponentFromSelection,
 } from '../store/documentStore.js';
 import './PropertiesPanel.css';
 
@@ -92,6 +93,17 @@ const MultiSelectionPanel: FC<{ count: number }> = ({ count }) => (
     </div>
     <div className="properties-panel__content">
       <AlignDistributeSection />
+      <div className="prop-field" style={{ marginTop: 8 }}>
+        <button className="prop-btn" onClick={() => {
+          const name = prompt('Component name:', 'Component');
+          if (name) createComponentFromSelection(name);
+        }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" style={{ width: 14, height: 14 }}>
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.27 5.82 22 7 14.14 2 9.27l6.91-1.01L12 2z" />
+          </svg>
+          Create Component
+        </button>
+      </div>
     </div>
   </div>
 );

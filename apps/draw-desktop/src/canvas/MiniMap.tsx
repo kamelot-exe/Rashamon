@@ -9,7 +9,7 @@
 
 import { FC, useEffect, useState, useRef } from 'react';
 import { getDocument, subscribe } from '../store/documentStore.js';
-import { getCanvasTransform, panTo } from '../store/canvasTransformStore.js';
+import { getCanvasTransform, panTo, subscribe as subscribeTransform } from '../store/canvasTransformStore.js';
 import './MiniMap.css';
 
 export const MiniMap: FC = () => {
@@ -19,12 +19,16 @@ export const MiniMap: FC = () => {
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
-    const unsub = subscribe(() => {
+    const unsubDoc = subscribe(() => {
+      updateViewport();
+      forceUpdate((n) => n + 1);
+    });
+    const unsubTransform = subscribeTransform(() => {
       updateViewport();
       forceUpdate((n) => n + 1);
     });
     updateViewport();
-    return unsub;
+    return () => { unsubDoc(); unsubTransform(); };
   }, []);
 
   function updateViewport() {

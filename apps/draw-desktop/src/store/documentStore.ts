@@ -326,19 +326,20 @@ export function addFrameNode(
  * Also resolves constraints on all children.
  */
 export function mutateFrameWidth(id: NodeId, width: number): void {
-  pushHistory();
   const doc = getCurrentDocument(store.history);
   const node = findNode(doc.root, id);
   if (!node || node.type !== 'frame') return;
   const frame = node as FrameSceneNode;
+
+  pushHistory();
   frame.width = Math.max(1, width);
-  // Resolve constraints for all children
-  for (const child of frame.children) {
-    resolveConstraints(child.id, id);
-  }
-  // Re-layout if auto layout is enabled
+
+  // Resolve constraints for all children (without extra pushHistory)
+  resolveConstraintsSilent(frame, id);
+
+  // Re-layout if auto layout is enabled (without extra pushHistory)
   if (frame.autoLayout.mode !== 'none') {
-    layoutChildren(frame);
+    layoutChildrenSilent(frame);
   }
   notify();
 }
@@ -348,21 +349,152 @@ export function mutateFrameWidth(id: NodeId, width: number): void {
  * Also resolves constraints on all children.
  */
 export function mutateFrameHeight(id: NodeId, height: number): void {
-  pushHistory();
   const doc = getCurrentDocument(store.history);
   const node = findNode(doc.root, id);
   if (!node || node.type !== 'frame') return;
   const frame = node as FrameSceneNode;
+
+  pushHistory();
   frame.height = Math.max(1, height);
-  // Resolve constraints for all children
-  for (const child of frame.children) {
-    resolveConstraints(child.id, id);
-  }
-  // Re-layout if auto layout is enabled
+
+  // Resolve constraints for all children (without extra pushHistory)
+  resolveConstraintsSilent(frame, id);
+
+  // Re-layout if auto layout is enabled (without extra pushHistory)
   if (frame.autoLayout.mode !== 'none') {
-    layoutChildren(frame);
+    layoutChildrenSilent(frame);
   }
   notify();
+}
+
+/**
+ * Resolve constraints without pushing history (called from mutateFrameWidth/Height).
+ */
+function resolveConstraintsSilent(frame: FrameSceneNode, _frameId: NodeId): void {
+  for (const child of frame.children) {
+    resolveConstraintsChildSilent(child, frame);
+  }
+}
+
+function resolveConstraintsChildSilent(child: SceneNode, frame: FrameSceneNode): void {
+  const constraints: Constraints = (child as any).constraints || defaultConstraints();
+
+  const baseline: Rect = (child as any).baselineBounds || {
+    x: child.transform.x,
+    y: child.transform.y,
+    width: getNodeWidth(child),
+    height: getNodeHeight(child),
+  };
+
+  switch (constraints.horizontal) {
+    case 'left':
+      child.transform.x = baseline.x;
+      break;
+    case 'right':
+      child.transform.x = frame.width - baseline.width;
+      break;
+    case 'center':
+      child.transform.x = (frame.width - baseline.width) / 2;
+      break;
+    case 'scale':
+      child.transform.x = (frame.width / (baseline.width || 1)) * baseline.x;
+      break;
+  }
+
+  switch (constraints.vertical) {
+    case 'top':
+      child.transform.y = baseline.y;
+      break;
+    case 'bottom':
+      child.transform.y = frame.height - baseline.height;
+      break;
+    case 'center':
+      child.transform.y = (frame.height - baseline.height) / 2;
+      break;
+    case 'scale':
+      child.transform.y = (frame.height / (baseline.height || 1)) * baseline.y;
+      break;
+  }
+}
+
+/**
+ * Layout children without pushing history (called from mutateFrameWidth/Height).
+ */
+function layoutChildrenSilent(frame: FrameSceneNode): void {
+  const config = frame.autoLayout;
+  if (config.mode === 'none' || frame.children.length === 0) return;
+
+  const isHorizontal = config.mode === 'horizontal';
+  const children = frame.children;
+
+  const availablePrimary = isHorizontal
+    ? frame.width - config.paddingLeft - config.paddingRight
+    : frame.height - config.paddingTop - config.paddingBottom;
+
+  const childSizes = children.map((child) => ({
+    node: child,
+    naturalSize: isHorizontal ? getNodeWidth(child) : getNodeHeight(child),
+    isFill: getChildFillBehavior(child, isHorizontal) === 'fill',
+  }));
+
+  const fillCount = childSizes.filter((c) => c.isFill).length;
+  const fixedTotal = childSizes
+    .filter((c) => !c.isFill)
+    .reduce((sum, c) => sum + c.naturalSize, 0);
+  const spacingTotal = Math.max(0, children.length - 1) * config.spacing;
+  const remaining = availablePrimary - fixedTotal - spacingTotal;
+  const fillSize = fillCount > 0 ? Math.max(0, remaining / fillCount) : 0;
+
+  let cursor = isHorizontal ? config.paddingLeft : config.paddingTop;
+
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    const cs = childSizes[i];
+    const size = cs.isFill ? fillSize : cs.naturalSize;
+
+    if (isHorizontal) {
+      child.transform.x = cursor;
+    } else {
+      child.transform.y = cursor;
+    }
+
+    const availableCounter = isHorizontal
+      ? frame.height - config.paddingTop - config.paddingBottom
+      : frame.width - config.paddingLeft - config.paddingRight;
+    const childCounterSize = isHorizontal ? getNodeHeight(child) : getNodeWidth(child);
+    const counterGap = Math.max(0, availableCounter - childCounterSize);
+
+    switch (config.counterAxisAlign) {
+      case 'min':
+        if (isHorizontal) child.transform.y = config.paddingTop;
+        else child.transform.x = config.paddingLeft;
+        break;
+      case 'center':
+        if (isHorizontal) child.transform.y = config.paddingTop + counterGap / 2;
+        else child.transform.x = config.paddingLeft + counterGap / 2;
+        break;
+      case 'max':
+        if (isHorizontal) child.transform.y = frame.height - config.paddingBottom - childCounterSize;
+        else child.transform.x = frame.width - config.paddingRight - childCounterSize;
+        break;
+    }
+
+    if (cs.isFill) {
+      setNodeSize(child, isHorizontal ? size : undefined, isHorizontal ? undefined : size);
+    }
+
+    cursor += size + config.spacing;
+  }
+
+  if (config.primaryAxisSizing === 'auto') {
+    const totalSize =
+      cursor - config.spacing + (isHorizontal ? config.paddingRight : config.paddingBottom);
+    if (isHorizontal) {
+      frame.width = Math.max(totalSize, 1);
+    } else {
+      frame.height = Math.max(totalSize, 1);
+    }
+  }
 }
 
 /**
