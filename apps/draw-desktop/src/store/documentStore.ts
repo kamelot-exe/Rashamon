@@ -862,9 +862,9 @@ function flatten(node: SceneNode, depth: number, result: FlatNode[]): void {
 
 export function findNode(node: SceneNode, id: NodeId): SceneNode | null {
   if (node.id === id) return node;
-  if (node.type === 'group') {
-    const group = node as GroupSceneNode;
-    for (const child of group.children) {
+  if (node.type === 'group' || node.type === 'frame') {
+    const container = node as ContainerNode;
+    for (const child of container.children) {
       const found = findNode(child, id);
       if (found) return found;
     }
