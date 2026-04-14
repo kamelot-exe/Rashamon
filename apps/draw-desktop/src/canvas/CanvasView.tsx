@@ -362,7 +362,16 @@ export const CanvasView: FC = () => {
           e.preventDefault();
           break;
         case 'g':
-          setShowGrid((prev) => !prev);
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            if (e.shiftKey) {
+              ungroupSelected();
+            } else {
+              groupSelected();
+            }
+          } else {
+            setShowGrid((prev) => !prev);
+          }
           break;
         case 's':
           if (!e.ctrlKey && !e.metaKey) {
@@ -394,16 +403,6 @@ export const CanvasView: FC = () => {
         case 'backspace':
           if (getSelectedIds().size > 0) {
             deleteSelected();
-          }
-          break;
-        case 'g':
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            if (e.shiftKey) {
-              ungroupSelected();
-            } else {
-              groupSelected();
-            }
           }
           break;
         case 'y':
