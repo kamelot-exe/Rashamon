@@ -19,6 +19,8 @@ import {
   enterContainer,
   mutateFrameWidth, mutateFrameHeight,
   updateFrameBackground, updateFrameClip,
+  enableAutoLayout, disableAutoLayout, updateAutoLayout,
+  getComponents, createInstance, deleteComponent,
 } from '../store/documentStore.js';
 import './PropertiesPanel.css';
 
@@ -103,6 +105,7 @@ const ShapePropertiesPanel: FC<{ shape: ShapeSceneNode; selectedId: string }> = 
       <Section title="Semantic Role">
         <RoleField selectedId={selectedId} role={shape.semanticRole} />
       </Section>
+      <ComponentsField />
       <AlignDistributeSection />
     </div>
   </div>
@@ -190,6 +193,11 @@ const FramePropertiesPanel: FC<{ node: FrameSceneNode; selectedId: string }> = (
       <Section title="Semantic Role">
         <RoleField selectedId={selectedId} role={node.semanticRole} />
       </Section>
+
+      <Section title="Auto Layout">
+        <AutoLayoutFields frameId={selectedId} frame={node} />
+      </Section>
+
       <div className="prop-field" style={{ marginTop: 8 }}>
         <button className="prop-btn" onClick={() => enterContainer(selectedId)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" style={{ width: 14, height: 14 }}>
@@ -438,3 +446,93 @@ function updateShapeDimension(shape: any, selectedId: string, dim: 'width' | 'he
     updateTransform(selectedId, { ...shape.transform });
   }
 }
+
+// ─── Auto Layout Fields ─────────────────────────────────
+
+const AutoLayoutFields: FC<{ frameId: string; frame: FrameSceneNode }> = ({ frameId, frame }) => {
+  const config = frame.autoLayout;
+  return (
+    <>
+      <div className="prop-row">
+        <button
+          className={`prop-btn ${config.mode === 'horizontal' ? 'prop-btn--active' : ''}`}
+          onClick={() => enableAutoLayout(frameId, 'horizontal')}
+          style={{ flex: 1 }}
+        >
+          ↔ Horizontal
+        </button>
+        <button
+          className={`prop-btn ${config.mode === 'vertical' ? 'prop-btn--active' : ''}`}
+          onClick={() => enableAutoLayout(frameId, 'vertical')}
+          style={{ flex: 1 }}
+        >
+          ↕ Vertical
+        </button>
+        {config.mode !== 'none' && (
+          <button className="prop-btn" onClick={() => disableAutoLayout(frameId)} title="Disable auto layout">
+            ✕
+          </button>
+        )}
+      </div>
+      {config.mode !== 'none' && (
+        <>
+          <Field label="Spacing">
+            <input className="prop-input" type="number" value={config.spacing} min={0} onChange={(e) => updateAutoLayout(frameId, { spacing: Number(e.target.value) })} />
+          </Field>
+          <div className="prop-row">
+            <Field label="Pad L">
+              <input className="prop-input" type="number" value={config.paddingLeft} min={0} onChange={(e) => updateAutoLayout(frameId, { paddingLeft: Number(e.target.value) })} />
+            </Field>
+            <Field label="Pad R">
+              <input className="prop-input" type="number" value={config.paddingRight} min={0} onChange={(e) => updateAutoLayout(frameId, { paddingRight: Number(e.target.value) })} />
+            </Field>
+          </div>
+          <div className="prop-row">
+            <Field label="Pad T">
+              <input className="prop-input" type="number" value={config.paddingTop} min={0} onChange={(e) => updateAutoLayout(frameId, { paddingTop: Number(e.target.value) })} />
+            </Field>
+            <Field label="Pad B">
+              <input className="prop-input" type="number" value={config.paddingBottom} min={0} onChange={(e) => updateAutoLayout(frameId, { paddingBottom: Number(e.target.value) })} />
+            </Field>
+          </div>
+        </>
+      )}
+    </>
+  );
+};
+
+// ─── Components Field ────────────────────────────────────
+
+const ComponentsField: FC = () => {
+  const components = getComponents();
+  if (components.length === 0) return null;
+
+  return (
+    <div className="prop-field">
+      <span className="prop-field__label">Components</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {components.map((comp) => (
+          <div key={comp.id} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <button
+              className="prop-btn"
+              onClick={() => createInstance(comp.id, { x: 100, y: 100 })}
+              style={{ flex: 1 }}
+              title={`Create instance of ${comp.name}`}
+            >
+              + {comp.name}
+            </button>
+            <button
+              className="prop-btn"
+              onClick={() => deleteComponent(comp.id)}
+              style={{ width: 28, padding: 0, color: 'var(--color-danger)' }}
+              title={`Delete ${comp.name}`}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+

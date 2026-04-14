@@ -17,6 +17,8 @@ import {
   FrameSceneNode,
   GroupSceneNode,
   TextSceneNode,
+  ImageSceneNode,
+  ComponentInstanceNode,
   NodeId,
   Transform,
   RectGeometry,
@@ -26,6 +28,20 @@ import {
   Stroke,
   Vec2,
   ColorString,
+  Rect,
+  AutoLayoutConfig,
+  defaultAutoLayoutConfig,
+  Constraints,
+  defaultConstraints,
+  LayoutOverride,
+  defaultLayoutOverride,
+  DocumentStyle,
+  StyleId,
+  ColorStyle,
+  TextStyle,
+  ComponentDefinition,
+  ComponentId,
+  Effect,
 } from '@rashamon/types';
 import { createDocument } from '@rashamon/core';
 import {
@@ -173,6 +189,9 @@ export function newDocument(title?: string): void {
 }
 
 export function setDocument(doc: RashamonDocument): void {
+  // Ensure backward compatibility: initialize missing fields
+  if (!doc.styles) doc.styles = [];
+  if (!doc.components) doc.components = [];
   store.history = createBranchingHistory(doc);
   store.selectedIds.clear();
   notify();
@@ -199,6 +218,7 @@ export function addShapeNode(
     geometry,
     fill,
     stroke,
+    effects: [],
     transform: { x: position?.x ?? 0, y: position?.y ?? 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0, skewY: 0 },
     visible: true,
     locked: false,
@@ -286,6 +306,7 @@ export function addFrameNode(
     height,
     background,
     clipContent: false,
+    autoLayout: defaultAutoLayoutConfig(),
     children: [],
     transform: { x: position?.x ?? 0, y: position?.y ?? 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0, skewY: 0 },
     visible: true,
@@ -816,6 +837,7 @@ function flattenContainerChildren(container: ContainerNode, baseDepth: number, r
       type: child.type,
       depth: baseDepth,
       visible: child.visible,
+      locked: child.locked,
       semanticRole: child.semanticRole,
     });
     if (child.type === 'group' || child.type === 'frame') {
@@ -832,6 +854,7 @@ export interface FlatNode {
   type: string;
   depth: number;
   visible: boolean;
+  locked: boolean;
   semanticRole?: import('@rashamon/types').SemanticRole;
 }
 
@@ -848,6 +871,7 @@ function flatten(node: SceneNode, depth: number, result: FlatNode[]): void {
     type: node.type,
     depth,
     visible: node.visible,
+    locked: node.locked,
     semanticRole: node.semanticRole,
   });
   if (node.type === 'group' || node.type === 'frame') {
@@ -1065,3 +1089,639 @@ export function distributeSelected(op: DistributeOp): void {
 
   notify();
 }
+
+/**
+ * Toggle node visibility.
+ */
+export function toggleVisibility(nodeId: NodeId): void {
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, nodeId);
+  if (!node) return;
+  pushHistory();
+  node.visible = !node.visible;
+  notify();
+}
+
+/**
+ * Toggle node lock.
+ */
+export function toggleLock(nodeId: NodeId): void {
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, nodeId);
+  if (!node) return;
+  pushHistory();
+  node.locked = !node.locked;
+  notify();
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUTO LAYOUT ENGINE
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Enable auto layout on a frame.
+ */
+export function enableAutoLayout(frameId: NodeId, mode: 'horizontal' | 'vertical'): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, frameId);
+  if (!node || node.type !== 'frame') return;
+
+  const frame = node as FrameSceneNode;
+  frame.autoLayout = { ...defaultAutoLayoutConfig(), mode };
+
+  // Layout children according to config
+  layoutChildren(frame);
+  notify();
+}
+
+/**
+ * Disable auto layout on a frame (switch to free-form).
+ */
+export function disableAutoLayout(frameId: NodeId): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, frameId);
+  if (!node || node.type !== 'frame') return;
+
+  (node as FrameSceneNode).autoLayout.mode = 'none';
+  notify();
+}
+
+/**
+ * Update auto layout config on a frame.
+ */
+export function updateAutoLayout(frameId: NodeId, updates: Partial<AutoLayoutConfig>): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, frameId);
+  if (!node || node.type !== 'frame') return;
+
+  const frame = node as FrameSceneNode;
+  frame.autoLayout = { ...frame.autoLayout, ...updates };
+  layoutChildren(frame);
+  notify();
+}
+
+/**
+ * Layout children of a frame based on auto layout config.
+ * This is the core auto layout engine.
+ */
+function layoutChildren(frame: FrameSceneNode): void {
+  const config = frame.autoLayout;
+  if (config.mode === 'none' || frame.children.length === 0) return;
+
+  const isHorizontal = config.mode === 'horizontal';
+
+  // First pass: measure children (use their natural size)
+  const children = frame.children;
+  let cursor = isHorizontal ? config.paddingLeft : config.paddingTop;
+
+  for (const child of children) {
+    child.transform.x = isHorizontal ? config.paddingLeft : cursor;
+    child.transform.y = isHorizontal ? cursor : config.paddingTop;
+
+    if (isHorizontal) {
+      cursor += getNodeWidth(child) + config.spacing;
+    } else {
+      cursor += getNodeHeight(child) + config.spacing;
+    }
+  }
+
+  // Set frame size if auto sizing
+  if (config.primaryAxisSizing === 'auto') {
+    const totalSize = cursor - config.spacing + (isHorizontal ? config.paddingRight : config.paddingBottom);
+    if (isHorizontal) {
+      frame.width = totalSize;
+    } else {
+      frame.height = totalSize;
+    }
+  }
+}
+
+/**
+ * Re-layout all frames (call after frame resize or config change).
+ */
+export function relayoutAll(): void {
+  const doc = getCurrentDocument(store.history);
+  relayoutNode(doc.root);
+  notify();
+}
+
+function relayoutNode(node: SceneNode): void {
+  if (node.type === 'frame') {
+    const frame = node as FrameSceneNode;
+    if (frame.autoLayout.mode !== 'none') {
+      layoutChildren(frame);
+    }
+    for (const child of frame.children) {
+      relayoutNode(child);
+    }
+  } else if (node.type === 'group') {
+    for (const child of (node as GroupSceneNode).children) {
+      relayoutNode(child);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// CONSTRAINTS
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Set constraints on a child node within a frame.
+ */
+export function setConstraints(nodeId: NodeId, constraints: Constraints): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, nodeId);
+  if (!node) return;
+
+  // Store constraints as a custom property on the node
+  (node as any).constraints = constraints;
+  notify();
+}
+
+/**
+ * Get constraints from a node.
+ */
+export function getConstraints(nodeId: NodeId): Constraints | null {
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, nodeId);
+  if (!node) return null;
+  return (node as any).constraints || null;
+}
+
+/**
+ * Resolve constraints: reposition child when parent frame resizes.
+ */
+export function resolveConstraints(childId: NodeId, frameId: NodeId): void {
+  const doc = getCurrentDocument(store.history);
+  const child = findNode(doc.root, childId);
+  const frame = findNode(doc.root, frameId);
+  if (!child || !frame || frame.type !== 'frame') return;
+
+  const constraints: Constraints = (child as any).constraints || defaultConstraints();
+  const f = frame as FrameSceneNode;
+
+  // Get baseline bounds if stored, otherwise use current
+  const baseline: Rect = (child as any).baselineBounds || {
+    x: child.transform.x,
+    y: child.transform.y,
+    width: getNodeWidth(child),
+    height: getNodeHeight(child),
+  };
+
+  // Apply horizontal constraint
+  switch (constraints.horizontal) {
+    case 'left':
+      child.transform.x = baseline.x;
+      break;
+    case 'right':
+      child.transform.x = f.width - (baseline.x + baseline.width) + baseline.x;
+      break;
+    case 'center':
+      child.transform.x = (f.width - baseline.width) / 2;
+      break;
+    case 'leftRight':
+      // Stretch: keep left, extend width
+      break;
+    case 'scale':
+      child.transform.x = (f.width / (baseline.width || 1)) * baseline.x;
+      break;
+  }
+
+  // Apply vertical constraint
+  switch (constraints.vertical) {
+    case 'top':
+      child.transform.y = baseline.y;
+      break;
+    case 'bottom':
+      child.transform.y = f.height - (baseline.y + baseline.height) + baseline.y;
+      break;
+    case 'center':
+      child.transform.y = (f.height - baseline.height) / 2;
+      break;
+    case 'topBottom':
+      break;
+    case 'scale':
+      child.transform.y = (f.height / (baseline.height || 1)) * baseline.y;
+      break;
+  }
+
+  notify();
+}
+
+// ═══════════════════════════════════════════════════════════
+// STYLES SYSTEM
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Add a style to the document.
+ */
+export function addStyle(style: DocumentStyle): StyleId {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  doc.styles.push(style);
+  notify();
+  return style.id;
+}
+
+/**
+ * Remove a style from the document.
+ */
+export function removeStyle(styleId: StyleId): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  doc.styles = doc.styles.filter((s) => s.id !== styleId);
+  // Clear references
+  clearStyleReferences(styleId);
+  notify();
+}
+
+/**
+ * Update a style.
+ */
+export function updateStyle(styleId: StyleId, updates: Partial<DocumentStyle>): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const idx = doc.styles.findIndex((s) => s.id === styleId);
+  if (idx < 0) return;
+  doc.styles[idx] = { ...doc.styles[idx], ...updates } as DocumentStyle;
+  notify();
+}
+
+/**
+ * Get all styles of a specific type.
+ */
+export function getStylesByType(type: 'color' | 'text' | 'effect'): DocumentStyle[] {
+  return getCurrentDocument(store.history).styles.filter((s) => s.type === type);
+}
+
+/**
+ * Get a style by ID.
+ */
+export function getStyle(styleId: StyleId): DocumentStyle | undefined {
+  return getCurrentDocument(store.history).styles.find((s) => s.id === styleId);
+}
+
+/**
+ * Create a color style.
+ */
+export function createColorStyle(name: string, color: ColorString, opacity = 1): StyleId {
+  const style: ColorStyle = {
+    id: `style-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name,
+    type: 'color',
+    color,
+    opacity,
+  };
+  return addStyle(style);
+}
+
+/**
+ * Create a text style.
+ */
+export function createTextStyle(
+  name: string,
+  fontFamily: string,
+  fontSize: number,
+  fontWeight = 400,
+  lineHeight = 1.2,
+  letterSpacing = 0,
+  textAlign: 'left' | 'center' | 'right' = 'left'
+): StyleId {
+  const style: TextStyle = {
+    id: `style-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name,
+    type: 'text',
+    fontFamily,
+    fontSize,
+    fontWeight,
+    lineHeight,
+    letterSpacing,
+    textAlign,
+    textDecoration: 'none',
+  };
+  return addStyle(style);
+}
+
+/**
+ * Apply a style reference to a node.
+ */
+export function applyStyleToNode(nodeId: NodeId, styleId: StyleId | null, styleType: 'fill' | 'text' | 'stroke' | 'effect'): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, nodeId);
+  if (!node) return;
+
+  switch (styleType) {
+    case 'fill':
+      (node as ShapeSceneNode).fillStyleId = styleId ?? undefined;
+      break;
+    case 'text':
+      (node as TextSceneNode).textStyleId = styleId ?? undefined;
+      break;
+    case 'stroke':
+      (node as ShapeSceneNode).strokeStyleId = styleId ?? undefined;
+      break;
+    case 'effect':
+      (node as ShapeSceneNode).effectStyleId = styleId ?? undefined;
+      break;
+  }
+
+  notify();
+}
+
+function clearStyleReferences(styleId: StyleId): void {
+  const doc = getCurrentDocument(store.history);
+  function walk(node: SceneNode): void {
+    if (node.type === 'shape') {
+      const s = node as ShapeSceneNode;
+      if (s.fillStyleId === styleId) delete s.fillStyleId;
+      if (s.strokeStyleId === styleId) delete s.strokeStyleId;
+      if (s.textStyleId === styleId) delete s.textStyleId;
+      if (s.effectStyleId === styleId) delete s.effectStyleId;
+    } else if (node.type === 'text') {
+      const t = node as TextSceneNode;
+      if (t.textStyleId === styleId) delete t.textStyleId;
+    }
+    if (node.type === 'frame' || node.type === 'group') {
+      const c = node as FrameSceneNode | GroupSceneNode;
+      c.children.forEach(walk);
+    }
+  }
+  doc.root.children.forEach(walk);
+}
+
+// ═══════════════════════════════════════════════════════════
+// COMPONENTS SYSTEM
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Create a component from a selected frame or group.
+ * The selected node becomes the master; a component definition is stored.
+ */
+export function createComponentFromSelection(name: string): ComponentId | null {
+  const selectedId = getSelectedId();
+  if (!selectedId) return null;
+
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, selectedId);
+  if (!node || (node.type !== 'frame' && node.type !== 'group')) return null;
+
+  pushHistory();
+
+  const componentId = `comp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const now = new Date().toISOString();
+
+  // Deep clone the node as master snapshot
+  const snapshot = JSON.parse(JSON.stringify(node));
+
+  const def: ComponentDefinition = {
+    id: componentId,
+    name,
+    masterNodeId: selectedId,
+    masterSnapshot: snapshot,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  doc.components.push(def);
+  notify();
+  return componentId;
+}
+
+/**
+ * Create an instance of a component at the given position.
+ */
+export function createInstance(
+  componentId: ComponentId,
+  position: Vec2
+): NodeId | null {
+  const doc = getCurrentDocument(store.history);
+  const comp = doc.components.find((c) => c.id === componentId);
+  if (!comp) return null;
+
+  pushHistory();
+
+  const instanceId = generateId();
+  const master = comp.masterSnapshot as FrameSceneNode | GroupSceneNode;
+
+  // Create instance node
+  const instanceNode: ComponentInstanceNode = {
+    id: instanceId,
+    name: comp.name,
+    type: 'componentInstance',
+    width: master.type === 'frame' ? master.width : 0,
+    height: master.type === 'frame' ? master.height : 0,
+    componentId,
+    overrides: [],
+    transform: { ...position, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0, skewY: 0 },
+    visible: true,
+    locked: false,
+    opacity: 1,
+    semanticTags: [],
+  };
+
+  addNodeToParent(instanceNode, getEditScopeGroupId());
+  store.selectedIds.clear();
+  store.selectedIds.add(instanceId);
+  notify();
+  return instanceId;
+}
+
+/**
+ * Get all component definitions.
+ */
+export function getComponents(): ComponentDefinition[] {
+  return getCurrentDocument(store.history).components;
+}
+
+/**
+ * Get a component definition by ID.
+ */
+export function getComponent(componentId: ComponentId): ComponentDefinition | undefined {
+  return getCurrentDocument(store.history).components.find((c) => c.id === componentId);
+}
+
+/**
+ * Delete a component definition.
+ */
+export function deleteComponent(componentId: ComponentId): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  doc.components = doc.components.filter((c) => c.id !== componentId);
+  notify();
+}
+
+/**
+ * Update a component master from the current master node state.
+ * This syncs all instances.
+ */
+export function updateComponentMaster(componentId: ComponentId): void {
+  const doc = getCurrentDocument(store.history);
+  const comp = doc.components.find((c) => c.id === componentId);
+  if (!comp) return;
+
+  pushHistory();
+  const masterNode = findNode(doc.root, comp.masterNodeId);
+  if (!masterNode) return;
+
+  comp.masterSnapshot = JSON.parse(JSON.stringify(masterNode));
+  comp.updatedAt = new Date().toISOString();
+  notify();
+}
+
+/**
+ * Detach a component instance — replace it with its current rendered structure.
+ */
+export function detachInstance(instanceId: NodeId): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const instance = findNode(doc.root, instanceId);
+  if (!instance || instance.type !== 'componentInstance') return;
+
+  const instNode = instance as ComponentInstanceNode;
+  const comp = doc.components.find((c) => c.id === instNode.componentId);
+  if (!comp) return;
+
+  // Deep clone the master snapshot as the replacement
+  const replacement: SceneNode = JSON.parse(JSON.stringify(comp.masterSnapshot));
+  // Update the replacement ID to match the instance ID
+  replacement.id = instanceId;
+  (replacement as any).name = instNode.name;
+
+  // Find parent and replace
+  const result = findNodeWithParent(doc.root, instanceId);
+  if (!result) return;
+
+  result.parent.children[result.index] = replacement;
+  notify();
+}
+
+// ═══════════════════════════════════════════════════════════
+// IMAGE NODE
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Add an image node.
+ */
+export function addImageNode(
+  imageRef: string,
+  width: number,
+  height: number,
+  name: string = 'Image',
+  position?: Vec2,
+  parentId?: NodeId | null
+): NodeId {
+  pushHistory();
+  const id = generateId();
+
+  const node: ImageSceneNode = {
+    id,
+    name,
+    type: 'image',
+    imageRef,
+    width,
+    height,
+    transform: { x: position?.x ?? 0, y: position?.y ?? 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0, skewY: 0 },
+    visible: true,
+    locked: false,
+    opacity: 1,
+    semanticTags: [],
+  };
+
+  addNodeToParent(node, parentId ?? null);
+  store.selectedIds.clear(); store.selectedIds.add(id);
+  notify();
+  return id;
+}
+
+// ═══════════════════════════════════════════════════════════
+// EFFECTS
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Add an effect to a shape node.
+ */
+export function addEffect(nodeId: NodeId, effect: Effect): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, nodeId);
+  if (!node || node.type !== 'shape') return;
+
+  if (!(node as ShapeSceneNode).effects) (node as ShapeSceneNode).effects = [];
+  (node as ShapeSceneNode).effects.push(effect);
+  notify();
+}
+
+/**
+ * Remove an effect from a shape node.
+ */
+export function removeEffect(nodeId: NodeId, index: number): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, nodeId);
+  if (!node || node.type !== 'shape') return;
+
+  const effects = (node as ShapeSceneNode).effects || [];
+  effects.splice(index, 1);
+  notify();
+}
+
+// ═══════════════════════════════════════════════════════════
+// LAYOUT OVERRIDES
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Set layout override on a child node within an auto-layout parent.
+ */
+export function setLayoutOverride(nodeId: NodeId, overrides: Partial<LayoutOverride>): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, nodeId);
+  if (!node) return;
+
+  if (!(node as any).layoutOverride) {
+    (node as any).layoutOverride = defaultLayoutOverride();
+  }
+  (node as any).layoutOverride = { ...(node as any).layoutOverride, ...overrides };
+  notify();
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS — node dimensions
+// ═══════════════════════════════════════════════════════════
+
+function getNodeWidth(node: SceneNode): number {
+  if (node.type === 'shape') {
+    const s = node as ShapeSceneNode;
+    if (s.geometry.type === 'rect') return s.geometry.width;
+    if (s.geometry.type === 'ellipse') return s.geometry.rx * 2;
+    if (s.geometry.type === 'line') return Math.abs(s.geometry.x2 - s.geometry.x1);
+  }
+  if (node.type === 'frame') return (node as FrameSceneNode).width;
+  if (node.type === 'text') {
+    const t = node as TextSceneNode;
+    return Math.max(t.content.length * t.fontSize * 0.5, 20);
+  }
+  if (node.type === 'image') return (node as ImageSceneNode).width;
+  if (node.type === 'componentInstance') return (node as ComponentInstanceNode).width;
+  return 0;
+}
+
+function getNodeHeight(node: SceneNode): number {
+  if (node.type === 'shape') {
+    const s = node as ShapeSceneNode;
+    if (s.geometry.type === 'rect') return s.geometry.height;
+    if (s.geometry.type === 'ellipse') return s.geometry.ry * 2;
+    if (s.geometry.type === 'line') return Math.abs(s.geometry.y2 - s.geometry.y1);
+  }
+  if (node.type === 'frame') return (node as FrameSceneNode).height;
+  if (node.type === 'text') return (node as TextSceneNode).fontSize;
+  if (node.type === 'image') return (node as ImageSceneNode).height;
+  if (node.type === 'componentInstance') return (node as ComponentInstanceNode).height;
+  return 0;
+}
+

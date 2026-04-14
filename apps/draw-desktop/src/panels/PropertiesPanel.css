@@ -325,3 +325,9 @@
 .align-btn:active {
   background: var(--color-bg-active);
 }
+
+.prop-btn--active {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent-border);
+  color: var(--color-accent);
+}

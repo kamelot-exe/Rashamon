@@ -138,6 +138,43 @@ export function renderSceneNodes(node: SceneNode): React.ReactElement {
       );
     }
 
+    case 'image': {
+      const img = node as import('@rashamon/types').ImageSceneNode;
+      return (
+        <g
+          key={img.id}
+          data-node-id={img.id}
+          transform={transformAttr || undefined}
+          opacity={img.opacity}
+          style={{ display: img.visible ? undefined : 'none' }}
+        >
+          <rect x={0} y={0} width={img.width} height={img.height} fill="#374151" rx={2} />
+          {/* Image placeholder — actual image rendering requires asset loading */}
+          <text x={img.width / 2} y={img.height / 2} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize={12} fontFamily="var(--font-sans)">
+            🖼 {img.name}
+          </text>
+        </g>
+      );
+    }
+
+    case 'componentInstance': {
+      const inst = node as import('@rashamon/types').ComponentInstanceNode;
+      return (
+        <g
+          key={inst.id}
+          data-node-id={inst.id}
+          transform={transformAttr || undefined}
+          opacity={inst.opacity}
+          style={{ display: inst.visible ? undefined : 'none' }}
+        >
+          <rect x={0} y={0} width={inst.width} height={inst.height} fill="none" stroke="rgba(139,92,246,0.4)" strokeWidth={1.5} strokeDasharray="4 2" rx={2} />
+          <text x={4} y={14} fill="rgba(139,92,246,0.5)" fontSize={10} fontFamily="var(--font-sans)" pointerEvents="none">
+            ◆ {inst.name}
+          </text>
+        </g>
+      );
+    }
+
     default: {
       const _exhaustive: never = node;
       return <g key={`unknown-${String(_exhaustive)}`} />;

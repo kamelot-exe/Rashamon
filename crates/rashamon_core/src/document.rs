@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, Result};
 use crate::scene_graph::{self, SceneNode};
+use crate::styles::DocumentStyle;
+use crate::components::ComponentDefinition;
 
 /// Document metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +62,12 @@ pub struct Document {
     pub metadata: Metadata,
     pub canvas: Canvas,
     pub root: SceneNode,
+    /// Reusable styles defined in this document.
+    #[serde(default)]
+    pub styles: Vec<DocumentStyle>,
+    /// Component definitions for this document.
+    #[serde(default)]
+    pub components: Vec<ComponentDefinition>,
 }
 
 impl Document {

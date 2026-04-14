@@ -345,6 +345,9 @@ export const CanvasView: FC = () => {
         case 'f':
           import('../tools/toolSystem.js').then((m) => m.setActiveTool('frame'));
           break;
+        case 'i':
+          // Image tool — placeholder
+          break;
         case 'r':
           import('../tools/toolSystem.js').then((m) => m.setActiveTool('rectangle'));
           break;
