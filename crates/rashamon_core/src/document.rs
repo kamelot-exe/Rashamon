@@ -87,6 +87,8 @@ impl Document {
             },
             canvas: Canvas::default(),
             root: scene_graph::create_root(),
+            styles: Vec::new(),
+            components: Vec::new(),
         }
     }
 

@@ -20,6 +20,6 @@ pub use error::{CoreError, Result};
 pub use scene_graph::{SceneNode, SceneNodeType};
 pub use transform::Transform;
 pub use geometry::Geometry;
-pub use styles::{DocumentStyle, StyleType, ColorStyle, TextStyle, EffectStyle, Effect};
+pub use styles::{DocumentStyle, StyleType, Effect};
 pub use components::ComponentDefinition;
 pub use layout::{AutoLayoutConfig, LayoutMode, Constraints, HorizontalConstraint, VerticalConstraint};
