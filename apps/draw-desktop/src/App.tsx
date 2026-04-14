@@ -23,6 +23,7 @@ import { CanvasView } from './canvas/CanvasView.js';
 import {
   getDocument, subscribe, canUndo, canRedo, undo, redo,
   getEditScopeGroup, getSelectedIds,
+  addFrameNode,
 } from './store/documentStore.js';
 import { handleNewDocument, handleSaveDocument, handleOpenDocument, handleExportSvg, handleExportPng } from './utils/fileOps.js';
 import { resetTransform, getCanvasTransform, subscribe as subscribeTransform } from './store/canvasTransformStore.js';
@@ -30,6 +31,13 @@ import { getActiveTool, subscribeTool } from './tools/toolSystem.js';
 import './styles/global.css';
 
 // ─── TopBar ─────────────────────────────────────────────
+
+const FRAME_PRESETS = [
+  { label: 'Desktop', w: 1440, h: 900 },
+  { label: 'Tablet', w: 768, h: 1024 },
+  { label: 'Mobile', w: 390, h: 844 },
+  { label: 'Custom', w: 800, h: 600 },
+];
 
 const TopBar: FC = () => {
   const doc = getDocument();
@@ -44,6 +52,14 @@ const TopBar: FC = () => {
     });
     return () => { unsubDoc(); unsubTransform(); };
   }, []);
+
+  const handleFramePreset = (preset: typeof FRAME_PRESETS[number]) => {
+    const ct = getCanvasTransform();
+    // Place frame near center of current view
+    const x = (doc.canvas.width / 2 - preset.w / 2) - (ct.panX / ct.zoom);
+    const y = (doc.canvas.height / 2 - preset.h / 2) - (ct.panY / ct.zoom);
+    addFrameNode(preset.w, preset.h, preset.label, '#FFFFFF', { x, y });
+  };
 
   const zoomPercent = Math.round(zoom * 100);
 
@@ -76,6 +92,29 @@ const TopBar: FC = () => {
       <div className="topbar__group">
         <button className="topbar__btn" onClick={handleExportSvg} title="Export SVG">SVG</button>
         <button className="topbar__btn" onClick={handleExportPng} title="Export PNG">PNG</button>
+      </div>
+
+      <div className="topbar__separator" />
+
+      {/* Frame presets */}
+      <div className="topbar__group">
+        <select
+          className="topbar__select"
+          title="Add frame preset"
+          defaultValue=""
+          onChange={(e) => {
+            if (e.target.value) {
+              const preset = FRAME_PRESETS.find((p) => p.label === e.target.value);
+              if (preset) handleFramePreset(preset);
+              e.target.value = '';
+            }
+          }}
+        >
+          <option value="" disabled>Frame</option>
+          {FRAME_PRESETS.map((p) => (
+            <option key={p.label} value={p.label}>{p.label} ({p.w}×{p.h})</option>
+          ))}
+        </select>
       </div>
 
       <div className="topbar__separator" />

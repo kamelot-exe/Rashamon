@@ -34,6 +34,17 @@
   font-size: 11px;
 }
 
+.scope-bar__type-badge {
+  font-size: 9px;
+  color: var(--color-accent);
+  background: var(--color-accent-dim);
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+}
+
 .scope-bar__current {
   color: var(--color-accent);
   font-weight: 600;

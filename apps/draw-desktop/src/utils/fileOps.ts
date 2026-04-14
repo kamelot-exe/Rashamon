@@ -238,6 +238,20 @@ function generateNodeSvg(node: any, indent: string): string {
       result += `${indent}</g>\n`;
       break;
     }
+    case 'frame': {
+      const tx = transform?.x ?? 0;
+      const ty = transform?.y ?? 0;
+      const frameTransform = buildTransformString({ ...transform, x: 0, y: 0 }) || '';
+      result += `${indent}<g transform="translate(${tx}, ${ty})${frameTransform ? ' ' + frameTransform : ''}" opacity="${opacity}">\n`;
+      if (node.background) {
+        result += `${indent}  <rect x="0" y="0" width="${node.width}" height="${node.height}" fill="${node.background}" rx="2" ry="2"/>\n`;
+      }
+      for (const child of node.children) {
+        result += generateNodeSvg(child, indent + '  ');
+      }
+      result += `${indent}</g>\n`;
+      break;
+    }
   }
 
   return result;

@@ -14,6 +14,7 @@ import {
   RashamonDocument,
   SceneNode,
   ShapeSceneNode,
+  FrameSceneNode,
   GroupSceneNode,
   TextSceneNode,
   NodeId,
@@ -24,6 +25,7 @@ import {
   Fill,
   Stroke,
   Vec2,
+  ColorString,
 } from '@rashamon/types';
 import { createDocument } from '@rashamon/core';
 import {
@@ -243,6 +245,109 @@ export function addTextNode(
   return id;
 }
 
+/**
+ * Add a node as a child of a specific parent (frame or group).
+ * If parentId is null, adds to root.
+ */
+export function addNodeToParent(node: SceneNode, parentId: NodeId | null): void {
+  const doc = getCurrentDocument(store.history);
+  if (!parentId) {
+    doc.root.children.push(node);
+    return;
+  }
+  const parent = findNode(doc.root, parentId);
+  if (parent && (parent.type === 'frame' || parent.type === 'group')) {
+    (parent as ContainerNode).children.push(node);
+  } else {
+    doc.root.children.push(node);
+  }
+}
+
+/**
+ * Create a new frame node and add it to the document.
+ * If parentId is provided, the frame becomes a child of that parent.
+ */
+export function addFrameNode(
+  width: number,
+  height: number,
+  name: string = 'Frame',
+  background: ColorString | null = '#FFFFFF',
+  position?: Vec2,
+  parentId?: NodeId | null
+): NodeId {
+  pushHistory();
+  const id = generateId();
+
+  const node: FrameSceneNode = {
+    id,
+    name,
+    type: 'frame',
+    width,
+    height,
+    background,
+    clipContent: false,
+    children: [],
+    transform: { x: position?.x ?? 0, y: position?.y ?? 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0, skewY: 0 },
+    visible: true,
+    locked: false,
+    opacity: 1,
+    semanticTags: [],
+  };
+
+  addNodeToParent(node, parentId ?? null);
+  store.selectedIds.clear(); store.selectedIds.add(id);
+  notify();
+  return id;
+}
+
+/**
+ * Update frame width directly (for inspector input).
+ */
+export function mutateFrameWidth(id: NodeId, width: number): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, id);
+  if (!node || node.type !== 'frame') return;
+  (node as FrameSceneNode).width = Math.max(1, width);
+  notify();
+}
+
+/**
+ * Update frame height directly (for inspector input).
+ */
+export function mutateFrameHeight(id: NodeId, height: number): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, id);
+  if (!node || node.type !== 'frame') return;
+  (node as FrameSceneNode).height = Math.max(1, height);
+  notify();
+}
+
+/**
+ * Update frame background color.
+ */
+export function updateFrameBackground(id: NodeId, background: ColorString | null): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, id);
+  if (!node || node.type !== 'frame') return;
+  (node as FrameSceneNode).background = background;
+  notify();
+}
+
+/**
+ * Update frame clip content toggle.
+ */
+export function updateFrameClip(id: NodeId, clip: boolean): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, id);
+  if (!node || node.type !== 'frame') return;
+  (node as FrameSceneNode).clipContent = clip;
+  notify();
+}
+
 export function updateTextContent(id: NodeId, content: string): void {
   pushHistory();
   const doc = getCurrentDocument(store.history);
@@ -451,7 +556,7 @@ export function groupSelected(): NodeId | null {
   const selectedIds = Array.from(store.selectedIds);
 
   // Find nodes and group by common parent
-  const nodesToGroup: { node: SceneNode; parent: GroupSceneNode; index: number }[] = [];
+  const nodesToGroup: { node: SceneNode; parent: ContainerNode; index: number }[] = [];
   for (const id of selectedIds) {
     const result = findNodeWithParent(doc.root, id);
     if (result) {
@@ -464,7 +569,7 @@ export function groupSelected(): NodeId | null {
   }
 
   // Group nodes that share the same parent
-  const byParent = new Map<GroupSceneNode, { node: SceneNode; index: number }[]>();
+  const byParent = new Map<ContainerNode, { node: SceneNode; index: number }[]>();
   for (const item of nodesToGroup) {
     const arr = byParent.get(item.parent) || [];
     arr.push(item);
@@ -472,7 +577,7 @@ export function groupSelected(): NodeId | null {
   }
 
   // Create one group for the largest parent set
-  let bestParent: GroupSceneNode | null = null;
+  let bestParent: ContainerNode | null = null;
   let bestItems: { node: SceneNode; index: number }[] = [];
   for (const [parent, items] of byParent) {
     if (items.length > bestItems.length) {
@@ -558,61 +663,165 @@ export function ungroupSelected(): void {
   notify();
 }
 
-// ─── Group Scope (Enter/Exit) ───────────────────────────────
+// ─── Group/Frame Scope (Enter/Exit) ───────────────────────────────
 
-let editScopeGroupId: NodeId | null = null;
+/** A container node that can be entered for scoped editing.
+ * Currently: GroupSceneNode and FrameSceneNode. */
+type ContainerNode = GroupSceneNode | FrameSceneNode;
+
+let editScopeContainerId: NodeId | null = null;
 
 /**
- * Enter a group for focused editing.
- * Selection and layers panel will operate within this group.
+ * Enter a container (group or frame) for focused editing.
+ * Selection and layers panel will operate within this container.
+ * Clears selection to avoid referencing nodes outside scope.
  */
-export function enterGroup(groupId: NodeId): boolean {
+export function enterContainer(containerId: NodeId): boolean {
   const doc = getCurrentDocument(store.history);
-  const node = findNode(doc.root, groupId);
-  if (!node || node.type !== 'group') return false;
+  const node = findNode(doc.root, containerId);
+  if (!node || (node.type !== 'group' && node.type !== 'frame')) return false;
 
-  editScopeGroupId = groupId;
+  editScopeContainerId = containerId;
+  store.selectedIds.clear();
   notify();
   return true;
 }
 
 /**
- * Exit current group scope, returning to parent scope.
+ * Exit current container scope, returning to parent scope.
+ * If inside a nested container, goes to the parent container.
+ * If at top-level container, returns to document root.
  */
-export function exitGroup(): void {
-  editScopeGroupId = null;
+export function exitContainer(): void {
+  if (!editScopeContainerId) return;
+
+  const doc = getCurrentDocument(store.history);
+  const result = findNodeWithParent(doc.root, editScopeContainerId);
+
+  if (result && result.parent.id !== doc.root.id) {
+    // Go to parent container
+    editScopeContainerId = result.parent.id;
+  } else {
+    // Go to root
+    editScopeContainerId = null;
+  }
+
   notify();
 }
 
+// Backward-compatible aliases
+/** @deprecated Use enterContainer */
+export function enterGroup(groupId: NodeId): boolean { return enterContainer(groupId); }
+/** @deprecated Use exitContainer */
+export function exitGroup(): void { exitContainer(); }
+
 /**
- * Get current edit scope group ID.
+ * Get the full scope path from root to current scope.
+ * Returns array of { id, name, type } for breadcrumb navigation.
+ */
+export function getScopePath(): { id: NodeId; name: string; type: string }[] {
+  if (!editScopeContainerId) return [];
+
+  const path: { id: NodeId; name: string; type: string }[] = [];
+  let currentId: NodeId | null = editScopeContainerId;
+  const doc = getCurrentDocument(store.history);
+
+  const ancestors: { id: NodeId; name: string; type: string }[] = [];
+  while (currentId) {
+    const node = findNode(doc.root, currentId);
+    if (!node) break;
+    ancestors.unshift({ id: node.id, name: node.name, type: node.type });
+
+    const result = findNodeWithParent(doc.root, currentId);
+    if (!result || result.parent.id === doc.root.id) break;
+    currentId = result.parent.id;
+  }
+
+  path.push(...ancestors);
+  return path;
+}
+
+/**
+ * Navigate to a specific scope level by container ID.
+ */
+export function navigateToScope(containerId: NodeId): boolean {
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, containerId);
+  if (!node || (node.type !== 'group' && node.type !== 'frame')) return false;
+
+  editScopeContainerId = containerId;
+  notify();
+  return true;
+}
+
+/**
+ * Get current edit scope container ID.
  * null means editing at document root level.
  */
 export function getEditScopeGroupId(): NodeId | null {
-  return editScopeGroupId;
+  return editScopeContainerId;
+}
+
+/**
+ * Get current edit scope container node (group or frame, or null for root).
+ */
+export function getEditScopeGroup(): ContainerNode | null {
+  if (!editScopeContainerId) return null;
+  const doc = getCurrentDocument(store.history);
+  const node = findNode(doc.root, editScopeContainerId);
+  return (node && (node.type === 'group' || node.type === 'frame')) ? node as ContainerNode : null;
 }
 
 /**
  * Get nodes within current edit scope.
  * If no scope is set, returns root children.
+ * Works for both groups and frames.
  */
 export function getScopedNodes(): SceneNode[] {
   const doc = getCurrentDocument(store.history);
-  if (!editScopeGroupId) return doc.root.children;
+  if (!editScopeContainerId) return doc.root.children;
 
-  const group = findNode(doc.root, editScopeGroupId);
-  if (!group || group.type !== 'group') return doc.root.children;
-  return (group as GroupSceneNode).children;
+  const container = findNode(doc.root, editScopeContainerId);
+  if (!container || (container.type !== 'group' && container.type !== 'frame')) return doc.root.children;
+  return (container as ContainerNode).children;
 }
 
 /**
- * Get the current edit scope group node (or null for root).
+ * Get a flat node list scoped to the current edit scope.
+ * Only includes nodes within the current scope hierarchy.
  */
-export function getEditScopeGroup(): GroupSceneNode | null {
-  if (!editScopeGroupId) return null;
+export function getScopedFlatNodeList(): FlatNode[] {
   const doc = getCurrentDocument(store.history);
-  const node = findNode(doc.root, editScopeGroupId);
-  return (node && node.type === 'group') ? node as GroupSceneNode : null;
+  const result: FlatNode[] = [];
+
+  if (!editScopeContainerId) {
+    flatten(doc.root, 0, result);
+  } else {
+    const container = findNode(doc.root, editScopeContainerId);
+    if (container && (container.type === 'group' || container.type === 'frame')) {
+      flattenContainerChildren(container, 0, result);
+    } else {
+      flatten(doc.root, 0, result);
+    }
+  }
+
+  return result;
+}
+
+function flattenContainerChildren(container: ContainerNode, baseDepth: number, result: FlatNode[]): void {
+  for (const child of container.children) {
+    result.push({
+      id: child.id,
+      name: child.name,
+      type: child.type,
+      depth: baseDepth,
+      visible: child.visible,
+      semanticRole: child.semanticRole,
+    });
+    if (child.type === 'group' || child.type === 'frame') {
+      flattenContainerChildren(child as ContainerNode, baseDepth + 1, result);
+    }
+  }
 }
 
 // ─── Flat node list for layers panel ────────────────────────
@@ -623,6 +832,7 @@ export interface FlatNode {
   type: string;
   depth: number;
   visible: boolean;
+  semanticRole?: import('@rashamon/types').SemanticRole;
 }
 
 export function getFlatNodeList(): FlatNode[] {
@@ -638,10 +848,11 @@ function flatten(node: SceneNode, depth: number, result: FlatNode[]): void {
     type: node.type,
     depth,
     visible: node.visible,
+    semanticRole: node.semanticRole,
   });
-  if (node.type === 'group') {
-    const group = node as GroupSceneNode;
-    for (const child of group.children) {
+  if (node.type === 'group' || node.type === 'frame') {
+    const container = node as ContainerNode;
+    for (const child of container.children) {
       flatten(child, depth + 1, result);
     }
   }
@@ -662,22 +873,22 @@ export function findNode(node: SceneNode, id: NodeId): SceneNode | null {
 }
 
 /**
- * Find a node and return it along with its parent group and index.
- * Used for group/ungroup operations.
+ * Find a node and return it along with its parent container and index.
+ * Used for group/ungroup and frame operations.
  */
 export function findNodeWithParent(
   node: SceneNode,
   id: NodeId,
-  parent: GroupSceneNode | null = null
-): { node: SceneNode; parent: GroupSceneNode; index: number } | null {
+  parent: ContainerNode | null = null
+): { node: SceneNode; parent: ContainerNode; index: number } | null {
   if (node.id === id && parent) {
     const idx = parent.children.findIndex((c) => c.id === id);
     return { node, parent, index: idx };
   }
-  if (node.type === 'group') {
-    const group = node as GroupSceneNode;
-    for (const child of group.children) {
-      const found = findNodeWithParent(child, id, group);
+  if (node.type === 'group' || node.type === 'frame') {
+    const container = node as ContainerNode;
+    for (const child of container.children) {
+      const found = findNodeWithParent(child, id, container);
       if (found) return found;
     }
   }
@@ -685,14 +896,14 @@ export function findNodeWithParent(
 }
 
 function removeNode(parent: SceneNode, id: NodeId): boolean {
-  if (parent.type === 'group') {
-    const group = parent as GroupSceneNode;
-    const idx = group.children.findIndex((c) => c.id === id);
+  if (parent.type === 'group' || parent.type === 'frame') {
+    const container = parent as ContainerNode;
+    const idx = container.children.findIndex((c) => c.id === id);
     if (idx >= 0) {
-      group.children.splice(idx, 1);
+      container.children.splice(idx, 1);
       return true;
     }
-    for (const child of group.children) {
+    for (const child of container.children) {
       if (removeNode(child, id)) return true;
     }
   }

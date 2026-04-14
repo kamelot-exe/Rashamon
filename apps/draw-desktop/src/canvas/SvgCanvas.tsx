@@ -8,24 +8,89 @@
  * may add Canvas/WebGL rendering for performance with large scenes.
  */
 
-import { SceneNode, ShapeSceneNode, GroupSceneNode, TextSceneNode, RectGeometry, EllipseGeometry, LineGeometry, TextGeometry, NodeId } from '@rashamon/types';
+import { SceneNode, ShapeSceneNode, FrameSceneNode, GroupSceneNode, TextSceneNode, RectGeometry, EllipseGeometry, LineGeometry, TextGeometry, NodeId } from '@rashamon/types';
 
 // ─── Main renderer ──────────────────────────────────────────
 
 export function renderSceneNodes(node: SceneNode): React.ReactElement {
-  const style: React.CSSProperties = {
-    transform: buildTransform(node.transform),
-    opacity: node.opacity,
-    display: node.visible ? undefined : 'none',
-    pointerEvents: node.locked ? 'none' : 'auto',
-  };
+  const transformAttr = buildTransform(node.transform);
 
   switch (node.type) {
     case 'group': {
       const group = node as GroupSceneNode;
       return (
-        <g key={node.id} data-node-id={node.id} style={style}>
+        <g
+          key={node.id}
+          data-node-id={node.id}
+          transform={transformAttr || undefined}
+          opacity={node.opacity}
+          style={{ display: node.visible ? undefined : 'none' }}
+        >
           {group.children.map((child) => renderSceneNodes(child))}
+        </g>
+      );
+    }
+
+    case 'frame': {
+      const frame = node as FrameSceneNode;
+      return (
+        <g
+          key={frame.id}
+          data-node-id={frame.id}
+          transform={transformAttr || undefined}
+          opacity={frame.opacity}
+          style={{ display: frame.visible ? undefined : 'none' }}
+        >
+          {/* Frame background */}
+          <rect
+            x={0}
+            y={0}
+            width={frame.width}
+            height={frame.height}
+            fill={frame.background ?? '#FFFFFF'}
+            rx={2}
+            ry={2}
+          />
+          {/* Frame border */}
+          <rect
+            x={0}
+            y={0}
+            width={frame.width}
+            height={frame.height}
+            fill="none"
+            stroke="rgba(255,255,255,0.12)"
+            strokeWidth={1}
+            rx={2}
+            ry={2}
+            pointerEvents="none"
+          />
+          {/* Frame name label */}
+          {frame.height > 30 && (
+            <text
+              x={8}
+              y={16}
+              fill="rgba(255,255,255,0.35)"
+              fontSize={10}
+              fontFamily="var(--font-sans)"
+              pointerEvents="none"
+              style={{ userSelect: 'none' }}
+            >
+              {frame.name}
+            </text>
+          )}
+          {/* Clip group if enabled */}
+          {frame.clipContent ? (
+            <>
+              <clipPath id={`clip-${frame.id}`}>
+                <rect x={0} y={0} width={frame.width} height={frame.height} rx={2} ry={2} />
+              </clipPath>
+              <g clipPath={`url(#clip-${frame.id})`}>
+                {frame.children.map((child) => renderSceneNodes(child))}
+              </g>
+            </>
+          ) : (
+            frame.children.map((child) => renderSceneNodes(child))
+          )}
         </g>
       );
     }
@@ -33,7 +98,13 @@ export function renderSceneNodes(node: SceneNode): React.ReactElement {
     case 'shape': {
       const shape = node as ShapeSceneNode;
       return (
-        <g key={node.id} data-node-id={node.id} style={style}>
+        <g
+          key={node.id}
+          data-node-id={node.id}
+          transform={transformAttr || undefined}
+          opacity={node.opacity}
+          style={{ display: node.visible ? undefined : 'none', pointerEvents: node.locked ? 'none' : 'auto' }}
+        >
           {renderGeometry(shape)}
         </g>
       );
@@ -45,12 +116,22 @@ export function renderSceneNodes(node: SceneNode): React.ReactElement {
         <text
           key={node.id}
           data-node-id={node.id}
-          x={node.transform.x}
-          y={node.transform.y + textNode.fontSize}
-          style={style}
+          x={textNode.transform.x}
+          y={textNode.transform.y + textNode.fontSize}
           fill={textNode.fill}
           fontFamily={textNode.fontFamily}
           fontSize={textNode.fontSize}
+          opacity={textNode.opacity}
+          transform={buildTransform({
+            x: 0,
+            y: 0,
+            rotation: textNode.transform.rotation,
+            scaleX: textNode.transform.scaleX,
+            scaleY: textNode.transform.scaleY,
+            skewX: textNode.transform.skewX,
+            skewY: textNode.transform.skewY,
+          }) || undefined}
+          style={{ display: textNode.visible ? undefined : 'none', pointerEvents: textNode.locked ? 'none' : 'auto' }}
         >
           {textNode.content}
         </text>
@@ -188,7 +269,7 @@ export function SelectionOverlay({ nodeId, nodes, onResize, onRotate }: Selectio
     nodeId
   );
 
-  if (!node || (node.type !== 'shape' && node.type !== 'text')) return null;
+  if (!node || (node.type !== 'shape' && node.type !== 'text' && node.type !== 'frame')) return null;
 
   const { x, y, rotation } = node.transform;
   let w = 0, h = 0, centerX = x, centerY = y;
@@ -225,6 +306,12 @@ export function SelectionOverlay({ nodeId, nodes, onResize, onRotate }: Selectio
         centerY = y + h / 2;
       }
     }
+  } else if (node.type === 'frame') {
+    const frame = node as FrameSceneNode;
+    w = frame.width;
+    h = frame.height;
+    centerX = x + w / 2;
+    centerY = y + h / 2;
   } else if (node.type === 'text') {
     const textNode = node as TextSceneNode;
     const approxWidth = textNode.content.length * textNode.fontSize * 0.6;
@@ -416,12 +503,12 @@ function handleRotateStart(
   window.addEventListener('mouseup', onMouseUp, { once: true });
 }
 
-function findNodeById(group: GroupSceneNode | null, id: string): SceneNode | null {
+function findNodeById(group: GroupSceneNode | FrameSceneNode | null, id: string): SceneNode | null {
   if (!group) return null;
   for (const child of group.children) {
     if (child.id === id) return child;
-    if (child.type === 'group') {
-      const found = findNodeById(child as GroupSceneNode, id);
+    if (child.type === 'group' || child.type === 'frame') {
+      const found = findNodeById(child as GroupSceneNode | FrameSceneNode, id);
       if (found) return found;
     }
   }

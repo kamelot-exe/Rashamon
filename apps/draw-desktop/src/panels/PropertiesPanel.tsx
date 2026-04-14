@@ -10,12 +10,15 @@
  */
 
 import { FC, useEffect, useState } from 'react';
-import type { ShapeSceneNode, TextSceneNode } from '@rashamon/types';
+import type { ShapeSceneNode, TextSceneNode, FrameSceneNode } from '@rashamon/types';
 import {
   subscribe, getSelectedId, getSelectedIds, getSelectedNode,
   updateTransform, updateNodeName, updateTextContent, updateTextProperties,
   updateFill, updateStroke, updateSemanticRole,
   alignSelected, distributeSelected,
+  enterContainer,
+  mutateFrameWidth, mutateFrameHeight,
+  updateFrameBackground, updateFrameClip,
 } from '../store/documentStore.js';
 import './PropertiesPanel.css';
 
@@ -53,6 +56,11 @@ export const PropertiesPanel: FC = () => {
   // Text node
   if (selectedNode.type === 'text') {
     return <TextPropertiesPanel node={selectedNode as TextSceneNode} selectedId={selectedId} />;
+  }
+
+  // Frame node
+  if (selectedNode.type === 'frame') {
+    return <FramePropertiesPanel node={selectedNode as FrameSceneNode} selectedId={selectedId} />;
   }
 
   // Group node
@@ -132,6 +140,64 @@ const TextPropertiesPanel: FC<{ node: TextSceneNode; selectedId: string }> = ({ 
       <Section title="Appearance">
         <ColorField label="Color" value={node.fill} onChange={(color) => updateTextProperties(selectedId, { fill: color })} />
       </Section>
+    </div>
+  </div>
+);
+
+// ─── Frame Properties ─────────────────────────────────
+
+const FramePropertiesPanel: FC<{ node: FrameSceneNode; selectedId: string }> = ({ node, selectedId }) => (
+  <div className="properties-panel">
+    <div className="properties-panel__header">
+      <SelectionSummary nodeType="frame" nodeName={node.name} />
+    </div>
+    <div className="properties-panel__content">
+      <Section title="Transform" defaultOpen>
+        <div className="prop-row">
+          <Field label="X">
+            <input className="prop-input" type="number" value={Math.round(node.transform.x)} onChange={(e) => updateTransform(selectedId, { ...node.transform, x: Number(e.target.value) })} />
+          </Field>
+          <Field label="Y">
+            <input className="prop-input" type="number" value={Math.round(node.transform.y)} onChange={(e) => updateTransform(selectedId, { ...node.transform, y: Number(e.target.value) })} />
+          </Field>
+        </div>
+        <div className="prop-row">
+          <Field label="W">
+            <input className="prop-input" type="number" value={Math.round(node.width)} min={1} onChange={(e) => mutateFrameWidth(selectedId, Number(e.target.value))} />
+          </Field>
+          <Field label="H">
+            <input className="prop-input" type="number" value={Math.round(node.height)} min={1} onChange={(e) => mutateFrameHeight(selectedId, Number(e.target.value))} />
+          </Field>
+        </div>
+      </Section>
+      <Section title="Appearance" defaultOpen>
+        <ColorField
+          label="Background"
+          value={node.background ?? 'none'}
+          onChange={(color) => updateFrameBackground(selectedId, color === 'none' ? null : color)}
+        />
+        <div className="prop-field">
+          <label className="prop-checkbox">
+            <input
+              type="checkbox"
+              checked={node.clipContent}
+              onChange={(e) => updateFrameClip(selectedId, e.target.checked)}
+            />
+            Clip content
+          </label>
+        </div>
+      </Section>
+      <Section title="Semantic Role">
+        <RoleField selectedId={selectedId} role={node.semanticRole} />
+      </Section>
+      <div className="prop-field" style={{ marginTop: 8 }}>
+        <button className="prop-btn" onClick={() => enterContainer(selectedId)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" style={{ width: 14, height: 14 }}>
+            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+          </svg>
+          Enter Frame
+        </button>
+      </div>
     </div>
   </div>
 );

@@ -77,6 +77,12 @@
   border-left-color: var(--color-accent);
 }
 
+/* Frame items have a subtle different accent */
+.layer-item--selected.frame-item {
+  background: rgba(34, 197, 94, 0.08);
+  border-left-color: var(--color-success);
+}
+
 .layer-item__icon {
   width: 16px;
   height: 16px;

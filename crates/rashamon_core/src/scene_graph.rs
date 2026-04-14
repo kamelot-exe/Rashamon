@@ -10,6 +10,7 @@ use crate::transform::Transform;
 #[serde(rename_all = "snake_case")]
 pub enum SceneNodeType {
     Group,
+    Frame,
     Shape,
     Text,
     Image,
@@ -51,6 +52,30 @@ pub enum SceneNode {
     Group {
         id: String,
         name: String,
+        children: Vec<SceneNode>,
+        #[serde(default)]
+        transform: Transform,
+        #[serde(default = "default_true")]
+        visible: bool,
+        #[serde(default)]
+        locked: bool,
+        #[serde(default = "default_one")]
+        opacity: f64,
+        #[serde(default)]
+        semantic_tags: Vec<String>,
+        #[serde(default)]
+        semantic_role: Option<SemanticRole>,
+    },
+    /// Frame — a sized container that acts as an artboard/design surface.
+    Frame {
+        id: String,
+        name: String,
+        width: f64,
+        height: f64,
+        #[serde(default)]
+        background: Option<String>,
+        #[serde(default = "default_true")]
+        clip_content: bool,
         children: Vec<SceneNode>,
         #[serde(default)]
         transform: Transform,
@@ -140,6 +165,7 @@ impl SceneNode {
     pub fn id(&self) -> &str {
         match self {
             SceneNode::Group { id, .. }
+            | SceneNode::Frame { id, .. }
             | SceneNode::Shape { id, .. }
             | SceneNode::Text { id, .. }
             | SceneNode::Image { id, .. } => id,
@@ -150,6 +176,7 @@ impl SceneNode {
     pub fn name(&self) -> &str {
         match self {
             SceneNode::Group { name, .. }
+            | SceneNode::Frame { name, .. }
             | SceneNode::Shape { name, .. }
             | SceneNode::Text { name, .. }
             | SceneNode::Image { name, .. } => name,
@@ -160,6 +187,7 @@ impl SceneNode {
     pub fn name_mut(&mut self) -> &mut String {
         match self {
             SceneNode::Group { name, .. }
+            | SceneNode::Frame { name, .. }
             | SceneNode::Shape { name, .. }
             | SceneNode::Text { name, .. }
             | SceneNode::Image { name, .. } => name,
@@ -170,6 +198,7 @@ impl SceneNode {
     pub fn is_visible(&self) -> bool {
         match self {
             SceneNode::Group { visible, .. }
+            | SceneNode::Frame { visible, .. }
             | SceneNode::Shape { visible, .. }
             | SceneNode::Text { visible, .. }
             | SceneNode::Image { visible, .. } => *visible,
@@ -180,16 +209,18 @@ impl SceneNode {
     pub fn transform_mut(&mut self) -> &mut Transform {
         match self {
             SceneNode::Group { transform, .. }
+            | SceneNode::Frame { transform, .. }
             | SceneNode::Shape { transform, .. }
             | SceneNode::Text { transform, .. }
             | SceneNode::Image { transform, .. } => transform,
         }
     }
 
-    /// Get mutable reference to children if this is a group.
+    /// Get mutable reference to children if this is a group or frame.
     pub fn children_mut(&mut self) -> Option<&mut Vec<SceneNode>> {
         match self {
-            SceneNode::Group { children, .. } => Some(children),
+            SceneNode::Group { children, .. }
+            | SceneNode::Frame { children, .. } => Some(children),
             _ => None,
         }
     }
@@ -198,6 +229,7 @@ impl SceneNode {
     pub fn node_type(&self) -> SceneNodeType {
         match self {
             SceneNode::Group { .. } => SceneNodeType::Group,
+            SceneNode::Frame { .. } => SceneNodeType::Frame,
             SceneNode::Shape { .. } => SceneNodeType::Shape,
             SceneNode::Text { .. } => SceneNodeType::Text,
             SceneNode::Image { .. } => SceneNodeType::Image,
@@ -209,12 +241,15 @@ impl SceneNode {
         if self.id() == id {
             return Some(self);
         }
-        if let SceneNode::Group { children, .. } = self {
-            for child in children {
-                if let Some(found) = child.find_by_id(id) {
-                    return Some(found);
+        match self {
+            SceneNode::Group { children, .. } | SceneNode::Frame { children, .. } => {
+                for child in children {
+                    if let Some(found) = child.find_by_id(id) {
+                        return Some(found);
+                    }
                 }
             }
+            _ => {}
         }
         None
     }
@@ -224,12 +259,15 @@ impl SceneNode {
         if self.id() == id {
             return Some(self);
         }
-        if let SceneNode::Group { children, .. } = self {
-            for child in children {
-                if let Some(found) = child.find_by_id_mut(id) {
-                    return Some(found);
+        match self {
+            SceneNode::Group { children, .. } | SceneNode::Frame { children, .. } => {
+                for child in children {
+                    if let Some(found) = child.find_by_id_mut(id) {
+                        return Some(found);
+                    }
                 }
             }
+            _ => {}
         }
         None
     }
@@ -238,7 +276,9 @@ impl SceneNode {
     pub fn count(&self) -> usize {
         let self_count = 1;
         let children_count = match self {
-            SceneNode::Group { children, .. } => children.iter().map(|c| c.count()).sum(),
+            SceneNode::Group { children, .. } | SceneNode::Frame { children, .. } => {
+                children.iter().map(|c| c.count()).sum()
+            }
             _ => 0,
         };
         self_count + children_count

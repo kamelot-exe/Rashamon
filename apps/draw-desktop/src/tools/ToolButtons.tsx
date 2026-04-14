@@ -17,6 +17,7 @@ interface ToolDef {
 const DRAW_TOOLS: ToolDef[] = [
   { type: 'select', icon: 'M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z', label: 'Select', shortcut: 'V' },
   { type: 'hand', icon: 'M18 11V6a2 2 0 0 0-4 0v1M14 10V4a2 2 0 0 0-4 0v6M10 10V5a2 2 0 0 0-4 0v11l-1.3-2.5a2 2 0 0 0-3.4 1.9L4 22h12l2-8a2 2 0 0 0-4 0', label: 'Hand / Pan', shortcut: 'H' },
+  { type: 'frame', icon: 'M3 3h18v18H3zM3 9h18', label: 'Frame', shortcut: 'F' },
 ];
 
 const SHAPE_TOOLS: ToolDef[] = [

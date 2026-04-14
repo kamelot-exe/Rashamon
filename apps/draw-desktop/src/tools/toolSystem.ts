@@ -25,6 +25,7 @@ import type {
 import {
   addShapeNode,
   addTextNode,
+  addFrameNode,
   selectNode,
   selectNodes,
   toggleSelection,
@@ -34,7 +35,7 @@ import {
   findNode,
 } from '../store/documentStore.js';
 
-export type ToolType = 'select' | 'hand' | 'rectangle' | 'ellipse' | 'line' | 'text';
+export type ToolType = 'select' | 'hand' | 'frame' | 'rectangle' | 'ellipse' | 'line' | 'text';
 
 export interface ToolContext {
   type: ToolType;
@@ -93,10 +94,11 @@ export function handleMouseDown(e: React.MouseEvent<SVGSVGElement>): void {
     handleSelectMouseDown(pos, e);
   } else if (activeTool === 'hand') {
     // Hand tool: pan is handled in CanvasView via space+drag or middle mouse
-    // Hand tool just sets the mode — no creation needed
     interaction.isDragging = true;
     interaction.startPos = pos;
     interaction.lastPos = pos;
+  } else if (activeTool === 'frame') {
+    handleFrameMouseDown(pos);
   } else if (activeTool === 'rectangle') {
     handleRectangleMouseDown(pos);
   } else if (activeTool === 'ellipse') {
@@ -117,6 +119,8 @@ export function handleMouseMove(e: React.MouseEvent<SVGSVGElement>): void {
 
   if (activeTool === 'select') {
     handleSelectMouseMove(pos);
+  } else if (activeTool === 'frame') {
+    handleFrameDragMouseMove(pos);
   } else {
     handleShapeDragMouseMove(pos);
   }
@@ -374,6 +378,47 @@ function handleLineMouseDown(pos: Vec2): void {
 function handleTextMouseDown(pos: Vec2): void {
   // Create text node with default content at click position
   addTextNode('Text', pos);
+}
+
+// ─── Frame tool ─────────────────────────────────────────────
+
+function handleFrameMouseDown(pos: Vec2): void {
+  interaction.isDragging = true;
+  interaction.startPos = pos;
+  interaction.lastPos = pos;
+
+  // Create frame with zero size at position
+  const id = addFrameNode(0, 0, 'Frame', '#FFFFFF', pos);
+  interaction.createdNodeId = id;
+}
+
+function handleFrameDragMouseMove(pos: Vec2): void {
+  const nodeId = interaction.createdNodeId;
+  if (!nodeId) return;
+
+  const dx = pos.x - interaction.startPos.x;
+  const dy = pos.y - interaction.startPos.y;
+
+  const doc = getDocument();
+  const node = findNode(doc.root, nodeId);
+  if (!node || node.type !== 'frame') return;
+
+  const frame = node as import('@rashamon/types').FrameSceneNode;
+  const newWidth = Math.abs(dx);
+  const newHeight = Math.abs(dy);
+  const newX = dx >= 0 ? interaction.startPos.x : pos.x;
+  const newY = dy >= 0 ? interaction.startPos.y : pos.y;
+
+  frame.width = newWidth;
+  frame.height = newHeight;
+
+  updateTransform(nodeId, {
+    ...node.transform,
+    x: newX,
+    y: newY,
+  });
+
+  interaction.lastPos = pos;
 }
 
 // ─── Shape drag (shared by rectangle, ellipse, line) ────────

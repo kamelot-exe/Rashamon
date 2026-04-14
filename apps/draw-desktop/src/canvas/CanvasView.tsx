@@ -342,6 +342,9 @@ export const CanvasView: FC = () => {
         case 'h':
           import('../tools/toolSystem.js').then((m) => m.setActiveTool('hand'));
           break;
+        case 'f':
+          import('../tools/toolSystem.js').then((m) => m.setActiveTool('frame'));
+          break;
         case 'r':
           import('../tools/toolSystem.js').then((m) => m.setActiveTool('rectangle'));
           break;
@@ -670,6 +673,8 @@ function getCursorForTool(tool: string): string {
       return 'default';
     case 'hand':
       return 'grab';
+    case 'frame':
+      return 'crosshair';
     case 'rectangle':
     case 'ellipse':
     case 'line':

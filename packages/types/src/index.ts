@@ -155,7 +155,7 @@ export type Geometry =
 
 // ─── Scene Node ──────────────────────────────────────────────
 
-export type SceneNodeType = 'group' | 'shape' | 'text' | 'image';
+export type SceneNodeType = 'group' | 'frame' | 'shape' | 'text' | 'image';
 
 export interface BaseSceneNode {
   id: NodeId;
@@ -176,6 +176,20 @@ export interface ShapeSceneNode extends BaseSceneNode {
   stroke: Stroke | null;
 }
 
+/**
+ * Frame — a sized container that acts as an artboard/design surface.
+ * Distinct from Group: frames have explicit width/height, optional
+ * background fill, and clip their contents to bounds.
+ */
+export interface FrameSceneNode extends BaseSceneNode {
+  type: 'frame';
+  width: number;
+  height: number;
+  background: ColorString | null;
+  clipContent: boolean;
+  children: SceneNode[];
+}
+
 export interface GroupSceneNode extends BaseSceneNode {
   type: 'group';
   children: SceneNode[];
@@ -189,7 +203,7 @@ export interface TextSceneNode extends BaseSceneNode {
   fill: ColorString;
 }
 
-export type SceneNode = ShapeSceneNode | GroupSceneNode | TextSceneNode;
+export type SceneNode = ShapeSceneNode | FrameSceneNode | GroupSceneNode | TextSceneNode;
 
 // ─── Semantic Roles ─────────────────────────────────────────
 

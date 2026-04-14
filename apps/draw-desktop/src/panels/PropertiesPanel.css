@@ -232,6 +232,41 @@
   padding: var(--space-3);
 }
 
+.prop-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.prop-checkbox input[type="checkbox"] {
+  accent-color: var(--color-accent);
+}
+
+.prop-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: inherit;
+  height: 30px;
+}
+
+.prop-btn:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-accent-border);
+  color: var(--color-text-primary);
+}
+
 /* ─── Role Badge ─────────────────────────────────────── */
 
 .role-badge {

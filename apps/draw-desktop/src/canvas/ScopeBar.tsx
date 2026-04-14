@@ -2,8 +2,8 @@
  * ScopeBar — breadcrumb bar showing current edit scope.
  *
  * Shows:
- * - Current scope path (Root > Group Name)
- * - Exit button when inside a group
+ * - Current scope path (Root > Frame/Group Name)
+ * - Exit button when inside a container
  *
  * Integrated into canvas area.
  */
@@ -18,20 +18,22 @@ import {
 import './ScopeBar.css';
 
 export const ScopeBar: FC = () => {
-  const [scopeGroupId, setScopeGroupId] = useState<string | null>(null);
+  const [scopeId, setScopeId] = useState<string | null>(null);
   const [scopeName, setScopeName] = useState<string>('Root');
+  const [scopeType, setScopeType] = useState<string>('');
   const [, forceUpdate] = useState(0);
 
   useEffect(() => {
     return subscribe(() => {
-      setScopeGroupId(getEditScopeGroupId());
-      const group = getEditScopeGroup();
-      setScopeName(group?.name ?? 'Root');
+      setScopeId(getEditScopeGroupId());
+      const container = getEditScopeGroup();
+      setScopeName(container?.name ?? 'Root');
+      setScopeType(container?.type ?? '');
       forceUpdate((n) => n + 1);
     });
   }, []);
 
-  if (!scopeGroupId) {
+  if (!scopeId) {
     return null;
   }
 
@@ -40,6 +42,7 @@ export const ScopeBar: FC = () => {
       <div className="scope-bar__path">
         <span className="scope-bar__root">Root</span>
         <span className="scope-bar__separator">/</span>
+        <span className="scope-bar__type-badge">{scopeType}</span>
         <span className="scope-bar__current">{scopeName}</span>
       </div>
       <button

@@ -285,6 +285,25 @@ body {
   justify-content: center;
 }
 
+.topbar__select {
+  background: var(--color-bg-surface);
+  border: none;
+  color: var(--color-text-secondary);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  font-family: inherit;
+  border-radius: var(--radius-sm);
+  height: 30px;
+  appearance: auto;
+}
+
+.topbar__select:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
 .topbar__doc-title {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);

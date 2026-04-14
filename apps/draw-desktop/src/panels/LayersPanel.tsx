@@ -84,7 +84,7 @@ const LayerItem: FC<{
 }> = ({ node, isSelected, onSelect, onDelete }) => {
   return (
     <li
-      className={`layer-item ${isSelected ? 'layer-item--selected' : ''}`}
+      className={`layer-item ${isSelected ? 'layer-item--selected' : ''} ${node.type === 'frame' ? 'frame-item' : ''}`}
       style={{ paddingLeft: 8 + node.depth * 16 }}
       role="option"
       aria-selected={isSelected}
@@ -116,6 +116,13 @@ const LayerItem: FC<{
 
 function getTypeIconSvg(type: string): React.ReactNode {
   switch (type) {
+    case 'frame':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M3 9h18" strokeWidth="1.4" />
+        </svg>
+      );
     case 'group':
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
