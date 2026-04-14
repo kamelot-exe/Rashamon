@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::geometry::Geometry;
 use crate::transform::Transform;
+use crate::layout::AutoLayoutConfig;
 
 /// Types of scene nodes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -14,6 +15,7 @@ pub enum SceneNodeType {
     Shape,
     Text,
     Image,
+    ComponentInstance,
 }
 
 /// A fill representation.
@@ -76,6 +78,8 @@ pub enum SceneNode {
         background: Option<String>,
         #[serde(default = "default_true")]
         clip_content: bool,
+        #[serde(default)]
+        auto_layout: AutoLayoutConfig,
         children: Vec<SceneNode>,
         #[serde(default)]
         transform: Transform,
@@ -131,7 +135,24 @@ pub enum SceneNode {
     Image {
         id: String,
         name: String,
+        width: f64,
+        height: f64,
         asset_ref: String,
+        #[serde(default)]
+        transform: Transform,
+        #[serde(default = "default_true")]
+        visible: bool,
+        #[serde(default)]
+        locked: bool,
+        #[serde(default = "default_one")]
+        opacity: f64,
+    },
+    ComponentInstance {
+        id: String,
+        name: String,
+        width: f64,
+        height: f64,
+        component_id: String,
         #[serde(default)]
         transform: Transform,
         #[serde(default = "default_true")]
@@ -168,7 +189,8 @@ impl SceneNode {
             | SceneNode::Frame { id, .. }
             | SceneNode::Shape { id, .. }
             | SceneNode::Text { id, .. }
-            | SceneNode::Image { id, .. } => id,
+            | SceneNode::Image { id, .. }
+            | SceneNode::ComponentInstance { id, .. } => id,
         }
     }
 
@@ -179,7 +201,8 @@ impl SceneNode {
             | SceneNode::Frame { name, .. }
             | SceneNode::Shape { name, .. }
             | SceneNode::Text { name, .. }
-            | SceneNode::Image { name, .. } => name,
+            | SceneNode::Image { name, .. }
+            | SceneNode::ComponentInstance { name, .. } => name,
         }
     }
 
@@ -190,7 +213,8 @@ impl SceneNode {
             | SceneNode::Frame { name, .. }
             | SceneNode::Shape { name, .. }
             | SceneNode::Text { name, .. }
-            | SceneNode::Image { name, .. } => name,
+            | SceneNode::Image { name, .. }
+            | SceneNode::ComponentInstance { name, .. } => name,
         }
     }
 
@@ -201,7 +225,8 @@ impl SceneNode {
             | SceneNode::Frame { visible, .. }
             | SceneNode::Shape { visible, .. }
             | SceneNode::Text { visible, .. }
-            | SceneNode::Image { visible, .. } => *visible,
+            | SceneNode::Image { visible, .. }
+            | SceneNode::ComponentInstance { visible, .. } => *visible,
         }
     }
 
@@ -212,7 +237,8 @@ impl SceneNode {
             | SceneNode::Frame { transform, .. }
             | SceneNode::Shape { transform, .. }
             | SceneNode::Text { transform, .. }
-            | SceneNode::Image { transform, .. } => transform,
+            | SceneNode::Image { transform, .. }
+            | SceneNode::ComponentInstance { transform, .. } => transform,
         }
     }
 
@@ -233,6 +259,7 @@ impl SceneNode {
             SceneNode::Shape { .. } => SceneNodeType::Shape,
             SceneNode::Text { .. } => SceneNodeType::Text,
             SceneNode::Image { .. } => SceneNodeType::Image,
+            SceneNode::ComponentInstance { .. } => SceneNodeType::ComponentInstance,
         }
     }
 

@@ -41,6 +41,8 @@ export function createDocument(title: string = 'Untitled'): RashamonDocument {
     metadata,
     canvas: defaultCanvasConfig(),
     root,
+    styles: [],
+    components: [],
   };
 }
 
