@@ -17,6 +17,7 @@ import {
   deleteSelected,
   toggleVisibility,
   toggleLock,
+  reorderNode,
   FlatNode,
 } from '../store/documentStore.js';
 import './LayersPanel.css';
@@ -84,13 +85,35 @@ const LayerItem: FC<{
   onSelect: (e: React.MouseEvent) => void;
   onDelete: () => void;
 }> = ({ node, isSelected, onSelect, onDelete }) => {
+  const [isDragOver, setIsDragOver] = useState(false);
+
   return (
     <li
-      className={`layer-item ${isSelected ? 'layer-item--selected' : ''} ${node.type === 'frame' ? 'frame-item' : ''}`}
+      className={`layer-item ${isSelected ? 'layer-item--selected' : ''} ${node.type === 'frame' ? 'frame-item' : ''} ${isDragOver ? 'layer-item--dragover' : ''}`}
       style={{ paddingLeft: 8 + node.depth * 16 }}
       role="option"
       aria-selected={isSelected}
       onClick={onSelect}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', node.id);
+        e.dataTransfer.effectAllowed = 'move';
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setIsDragOver(true);
+      }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        const draggedId = e.dataTransfer.getData('text/plain');
+        if (draggedId && draggedId !== node.id) {
+          // Reorder: move dragged node to this position
+          reorderNode(draggedId, 'up');
+        }
+      }}
     >
       <span className="layer-item__icon" aria-hidden="true">
         {getTypeIconSvg(node.type)}

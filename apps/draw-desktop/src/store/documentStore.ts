@@ -1266,6 +1266,46 @@ export function toggleLock(nodeId: NodeId): void {
   notify();
 }
 
+/**
+ * Reorder a node within its parent (move up/down in the children list).
+ */
+export function reorderNode(nodeId: NodeId, direction: 'up' | 'down'): void {
+  const doc = getCurrentDocument(store.history);
+  const result = findNodeWithParent(doc.root, nodeId);
+  if (!result) return;
+
+  const { parent, index } = result;
+  const children = parent.children;
+  const newIdx = direction === 'up' ? index + 1 : index - 1;
+
+  if (newIdx < 0 || newIdx >= children.length) return;
+
+  pushHistory();
+  // Swap
+  [children[index], children[newIdx]] = [children[newIdx], children[index]];
+  notify();
+}
+
+/**
+ * Move a node into a different parent (frame or group).
+ */
+export function moveNodeToParent(nodeId: NodeId, newParentId: NodeId): void {
+  pushHistory();
+  const doc = getCurrentDocument(store.history);
+  const nodeResult = findNodeWithParent(doc.root, nodeId);
+  if (!nodeResult) return;
+
+  const newParent = findNode(doc.root, newParentId);
+  if (!newParent || (newParent.type !== 'frame' && newParent.type !== 'group')) return;
+
+  // Remove from old parent
+  nodeResult.parent.children.splice(nodeResult.index, 1);
+
+  // Add to new parent
+  (newParent as FrameSceneNode | GroupSceneNode).children.push(nodeResult.node);
+  notify();
+}
+
 // ═══════════════════════════════════════════════════════════
 // AUTO LAYOUT ENGINE
 // ═══════════════════════════════════════════════════════════

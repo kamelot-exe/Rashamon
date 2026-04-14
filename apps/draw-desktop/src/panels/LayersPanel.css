@@ -173,3 +173,9 @@
   width: 14px;
   height: 14px;
 }
+
+.layer-item--dragover {
+  background: var(--color-accent-dim);
+  border-left-color: var(--color-accent);
+  border-left-width: 3px;
+}
