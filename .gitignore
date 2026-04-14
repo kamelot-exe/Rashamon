@@ -1,47 +1,38 @@
-# Obsidian
-.obsidian/
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-ssr/
+*.local
+
+# Editor directories
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Node
-node_modules/
-npm-debug.log
-yarn-error.log
-pnpm-debug.log
-
 # Rust
 target/
-**/*.rs.bk
-Cargo.lock
+*.rs.bk
 
-# Build
-dist/
-build/
-out/
+# Tauri
+apps/draw-desktop/src-tauri/target/
 
 # Logs
 *.log
-logs/
-
-# Temp
-tmp/
-temp/
-*.tmp
+npm-debug.log*
+pnpm-debug.log*
 
 # Environment
 .env
 .env.local
 .env.*.local
 
-# Testing
-coverage/
-.nyc_output/
+# Tauri dev
+apps/draw-desktop/src-tauri/gen/

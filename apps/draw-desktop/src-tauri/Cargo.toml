@@ -1,0 +1,26 @@
+[package]
+name = "rashamon-draw-desktop"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "rashamon_draw_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "rashamon-draw"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+serde = { workspace = true }
+serde_json = { workspace = true }
+rashamon_core = { path = "../../../crates/rashamon_core" }
+rashamon_file_format = { path = "../../../crates/rashamon_file_format" }

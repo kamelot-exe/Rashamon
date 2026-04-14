@@ -2,7 +2,19 @@
   "permissions": {
     "allow": [
       "Bash(git config *)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(cat *)",
+      "Bash(rustc *)",
+      "Bash(cargo *)",
+      "Bash(which *)",
+      "Bash(pnpm *)",
+      "Bash(node *)",
+      "Bash(npx *)",
+      "Bash(curl *)",
+      "Bash(sh *)",
+      "Bash(source *)",
+      "Bash(lsof *)",
+      "Bash(sed *)"
     ]
   },
   "$version": 3

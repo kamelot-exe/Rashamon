@@ -1,0 +1,20 @@
+[
+  {
+    "identifier": "default",
+    "description": "Default capabilities for Rashamon Draw",
+    "local": true,
+    "windows": ["main"],
+    "permissions": [
+      "core:default",
+      "shell:allow-open",
+      "dialog:default",
+      "fs:default",
+      "fs:allow-read-text-file",
+      "fs:allow-write-text-file",
+      "fs:allow-exists",
+      "fs:scope",
+      "fs:read-all",
+      "fs:write-all"
+    ]
+  }
+]

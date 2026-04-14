@@ -12,7 +12,7 @@ Rashamon is an **ecosystem of professional creative tools** built on a shared op
 
 | Product | Type | Status |
 |---|---|---|
-| **Rashamon Draw** | Vector/UI/layout editor | 🟡 In development (MVP) |
+| **Rashamon Draw** | Vector/UI/layout editor | 🟡 In development — app shell ready |
 | **Rashamon Photo** | Raster/photo editor | 🔒 Planned |
 | **Rashamon Motion** | Motion graphics/animation | 🔒 Planned |
 
@@ -46,8 +46,6 @@ Rashamon takes a different approach:
 - **Keyboard-first UX** — everything accessible via keyboard
 - **AI only where it helps** — assistance, not replacement
 
-See [[Product Philosophy]] for the full document.
-
 ---
 
 ## Architecture
@@ -57,26 +55,80 @@ See [[Product Philosophy]] for the full document.
 | Layer | Technology |
 |---|---|
 | App shell | Tauri 2 |
-| Frontend | React + TypeScript |
+| Frontend | React 19 + TypeScript |
 | Backend | Rust |
 | Build | pnpm workspace + cargo workspace |
-| Rendering | SVG/Canvas hybrid |
+| Bundler | Vite 6 |
+| Rendering | SVG/Canvas hybrid (planned) |
 | Storage | JSON-based project files, SQLite where useful |
 
 ### Structure
 
 ```
 rashamon/
-├── crates/          # Rust libraries (core, plugins, assets)
-├── packages/        # TypeScript packages (UI, bindings)
-├── apps/
-│   ├── draw/        # Rashamon Draw
-│   ├── photo/       # Rashamon Photo (later)
-│   └── motion/      # Rashamon Motion (later)
-└── docs/            # Obsidian knowledge base (strategy, architecture)
+├── apps/draw-desktop/          # Rashamon Draw (Tauri 2 + React)
+│   ├── src/                    # React frontend (app shell UI)
+│   └── src-tauri/              # Rust backend (Tauri commands)
+├── packages/
+│   ├── types/                  # @rashamon/types — shared TS types
+│   ├── core/                   # @rashamon/core — document factory
+│   └── ui/                     # @rashamon/ui — shell components
+├── crates/
+│   ├── rashamon_core/          # Rust data model
+│   └── rashamon_file_format/   # .rdraw serialization
+└── docs/                       # Obsidian knowledge base
 ```
 
-Full architecture: [[System Architecture]]
+Full architecture: [Workspace Structure](docs/04_ARCHITECTURE/Workspace%20Structure.md)
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- **Node.js** ≥ 20
+- **pnpm** ≥ 10 (`corepack enable` or `npm i -g pnpm`)
+- **Rust** ≥ 1.80 (`rustup install stable`)
+- **Linux build deps**: `webkit2gtk-4.1`, `build-essential`, `curl`, `wget`, `file`, `libssl-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`
+
+### Quick Start
+
+```bash
+# Clone
+git clone https://github.com/kamelot-exe/Rashamon.git
+cd Rashamon
+
+# Install dependencies
+pnpm install
+
+# Run Rashamon Draw in dev mode
+pnpm dev:draw
+```
+
+### Root Commands
+
+| Command | Description |
+|---|---|
+| `pnpm dev:draw` | Start Draw in dev mode (Vite HMR) |
+| `pnpm build:draw` | Production build |
+| `pnpm check` | Format check + lint + typecheck |
+| `pnpm format` | Auto-format all TS/CSS files |
+| `pnpm lint` | Run ESLint |
+| `pnpm typecheck` | TypeScript type check |
+
+### Rust Commands
+
+```bash
+# From the project root:
+cargo check --workspace        # Check all crates
+cargo clippy --workspace       # Lint all crates
+cargo test --workspace         # Test all crates
+
+# Tauri commands (from apps/draw-desktop/src-tauri/):
+cargo tauri dev                # Run with Tauri CLI
+cargo tauri build              # Build release binary
+```
 
 ---
 
@@ -84,8 +136,8 @@ Full architecture: [[System Architecture]]
 
 | Phase | Name | Status |
 |---|---|---|
-| Phase 0 | Foundation / docs / strategy | 🟡 Current |
-| Phase 1 | Monorepo + app shell | 🔒 |
+| Phase 0 | Foundation / docs / strategy | ✅ Complete |
+| Phase 1 | Monorepo + app shell | 🟡 In progress — shell boots |
 | Phase 2 | Document model + scene graph | 🔒 |
 | Phase 3 | Basic editor MVP | 🔒 |
 | Phase 4 | Usability layer | 🔒 |
@@ -93,7 +145,7 @@ Full architecture: [[System Architecture]]
 | Phase 6 | Plugin foundation | 🔒 |
 | Phase 7 | Community / governance / release | 🔒 |
 
-Full roadmap: [[Product Roadmap]]
+Full roadmap: [Product Roadmap](docs/02_STRATEGY/Product%20Roadmap.md)
 
 ---
 
@@ -112,35 +164,21 @@ Rashamon differentiates through **unique workflows** that existing tools simply 
 
 ## Contributing
 
-Contributions are welcome. Read [[CONTRIBUTING]] and the [[Code of Conduct]] before starting.
-
-**Quick start:**
-
-```bash
-git clone https://github.com/kamelot-exe/Rashamon.git
-cd Rashamon
-# Setup instructions in CONTRIBUTING.md
-```
-
-Look for [good-first-issue](https://github.com/kamelot-exe/Rashamon/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-issue) tags to get started.
+Contributions are welcome. See the [CONTRIBUTING](docs/09_GITHUB/CONTRIBUTING.md) guide and [Code of Conduct](docs/09_GITHUB/CODE_OF_CONDUCT.md).
 
 ---
 
 ## Brand & Trademark
 
-> ⚠️ **Important**: The Rashamon code is open source and can be forked under the terms of its license. However, the **name "Rashamon"**, official logos, and official builds are governed separately.
+> ⚠️ The Rashamon code is open source and can be forked under the terms of its license. However, the **name "Rashamon"**, official logos, and official builds are governed separately. This is the same model as Mozilla Firefox, Blender, and Canonical Ubuntu.
 
-This follows the same model as Mozilla Firefox, Blender, and Canonical Ubuntu: **open code, managed brand**.
-
-Full policy: [[Brand and Trademark Policy]]
+Full policy: [Brand and Trademark Policy](docs/02_STRATEGY/Brand%20and%20Trademark%20Policy.md)
 
 ---
 
 ## License
 
-License: **TBD** (under consideration: MIT / Apache-2.0 / GPL-3.0)
-
-The license decision will be made and documented before the first public release. See [[Open Questions]] → SQ-01 for the current discussion.
+**TBD** — under consideration: MIT / Apache-2.0 / GPL-3.0. Decision will be made before first public release.
 
 ---
 
@@ -148,20 +186,91 @@ The license decision will be made and documented before the first public release
 
 The full strategic and architectural documentation lives in the `docs/` folder as an **Obsidian vault**. Start with:
 
-- [[00_INDEX]] — knowledge base index
-- [[Project Vision]] — why Rashamon exists
-- [[Product Philosophy]] — our decision-making filters
-- [[MVP Scope]] — what the first product includes
-- [[System Architecture]] — technical overview
-- [[Open Questions]] — unresolved decisions
+- [Index](docs/00_INDEX.md) — knowledge base index
+- [Project Vision](docs/01_VISION/Project%20Vision.md) — why Rashamon exists
+- [Product Philosophy](docs/01_VISION/Product%20Philosophy.md) — decision-making filters
+- [MVP Scope](docs/02_STRATEGY/MVP%20Scope.md) — what the first product includes
+- [System Architecture](docs/04_ARCHITECTURE/System%20Architecture.md) — technical overview
+- [Open Questions](docs/10_APPENDICES/Open%20Questions.md) — unresolved decisions
 
 ---
 
 ## Status
 
-**Early stage.** This project is in the foundation phase. No working product yet — strategy and architecture first, code second.
+**Phase 3B complete.** The editor now has creative graph foundations with visible UI:
 
-Follow this repository for updates.
+### Core Features
+- ✅ SVG canvas renders rectangles, ellipses, lines, text
+- ✅ Select tool: click to select, drag to move
+- ✅ Rectangle/Ellipse/Line tools: click-drag to create
+- ✅ Text tool: click to create, double-click to edit inline (no browser prompt)
+- ✅ Properties panel: edit x, y, width, height, rotation, fill, stroke, semantic role
+- ✅ Fill/stroke editing with color picker and stroke width control
+- ✅ Layers panel: reflects document nodes, select/delete
+- ✅ Save/Open .rdraw files (with fallback download)
+- ✅ Export SVG (clean markup from document)
+- ✅ Export PNG (canvas rasterization)
+
+### History & Branching
+- ✅ Branching history foundation (DAG-based, not linear)
+- ✅ History panel showing depth, node count, branch count
+- ✅ Branch indicator (main vs forked)
+- ✅ Navigate backward/forward via panel buttons or keyboard
+- ⚠️ Visual graph history UI — groundwork only, not full visualization
+- ⚠️ History is in-memory only; not persisted in save/load (by design)
+
+### Group Scope Editing
+- ✅ Double-click group to enter focused editing
+- ✅ Scope bar shows current path (Root → Group Name)
+- ✅ Exit button to return to parent scope
+- ✅ Escape key exits group
+- ✅ Canvas editing acts within scope
+- ✅ Layers panel reflects scope
+
+### Semantic Roles
+- ✅ Semantic role editor in PropertiesPanel
+- ✅ Supported roles: background, foreground, annotation, guide, ui-element, custom
+- ✅ Roles persist in save/load (part of SceneNode serialization)
+- ✅ Role badge display in inspector
+
+### Zoom & Pan
+- ✅ Mouse wheel zoom (centered on cursor)
+- ✅ Space+drag or middle mouse drag for pan
+- ✅ Ctrl+/Ctrl+ for zoom, Ctrl+0 for reset
+- ✅ Selection overlay and handles stay correct under zoom
+
+### Grid & Snap
+- ✅ Visible grid with toggle (G key)
+- ✅ Snap-to-grid for shape creation and movement (S key)
+- ✅ Shift key also enables snap during resize
+
+### Keyboard Shortcuts
+| Shortcut | Action |
+|---|---|
+| `V` | Select tool |
+| `R` | Rectangle tool |
+| `E` | Ellipse tool |
+| `L` | Line tool |
+| `T` | Text tool |
+| `G` | Toggle grid visibility |
+| `S` | Toggle snap-to-grid |
+| `Space+drag` | Pan canvas |
+| `Middle mouse drag` | Pan canvas |
+| `Mouse wheel` | Zoom (centered on cursor) |
+| `Ctrl++` / `Ctrl+-` | Zoom in/out |
+| `Ctrl+0` | Reset view |
+| `Delete` / `Backspace` | Delete selected |
+| `Ctrl+Z` | Undo |
+| `Ctrl+Y` / `Ctrl+Shift+Z` | Redo |
+| `Ctrl+G` | Group selected |
+| `Ctrl+Shift+G` | Ungroup selected |
+| `Escape` | Exit group scope / Close text editor |
+| `Double-click text` | Edit inline |
+| `Double-click group` | Enter group focused editing |
+
+**Not yet implemented:** pen/path editing, boolean operations, gradient fills, plugin system, visual history graph UI, branch merging, history persistence in save/load, semantic canvas querying.
+
+Next: Phase 4 — differentiators v2 (semantic canvas, plugin foundation, visual history graph).
 
 ---
 
